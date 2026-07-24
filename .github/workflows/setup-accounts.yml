@@ -1,0 +1,22 @@
+name: Initialize study accounts
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run setup:accounts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LOGIN_EMAIL_DOMAIN: ${{ vars.LOGIN_EMAIL_DOMAIN }}
+          STUDY_ADMIN_PASSWORD: ${{ secrets.STUDY_ADMIN_PASSWORD }}
+          STUDY_USER1_PASSWORD: ${{ secrets.STUDY_USER1_PASSWORD }}
+          STUDY_USER2_PASSWORD: ${{ secrets.STUDY_USER2_PASSWORD }}
