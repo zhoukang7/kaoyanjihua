@@ -3,14 +3,15 @@ name: Deploy study dashboard
 on:
   push:
     branches: ["main"]
-    paths-ignore:
-      - "deployment-status.json"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
   group: pages
@@ -21,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Prepare static site
         env:
@@ -29,7 +30,16 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           LOGIN_EMAIL_DOMAIN: ${{ vars.LOGIN_EMAIL_DOMAIN }}
         run: |
+          set -euo pipefail
           test -f index.html
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::Missing repository secret: SUPABASE_URL"
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Missing repository secret: SUPABASE_PUBLISHABLE_KEY"
+            exit 1
+          fi
           mkdir -p _site
           cp index.html _site/index.html
           touch _site/.nojekyll
@@ -40,7 +50,7 @@ jobs:
             loginEmailDomain: "${LOGIN_EMAIL_DOMAIN:-study822.example.com}"
           };
           CONFIG
-          echo "Site prepared. Supabase configuration present: $([ -n "$SUPABASE_URL" ] && echo yes || echo no)"
+          echo "Static site prepared successfully."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -60,16 +70,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Record successful deployment
-        env:
-          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: |
-          git clone --depth 1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
-          cd repo
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf '{\n  "status": "success",\n  "page_url": "%s",\n  "source_sha": "%s",\n  "deployed_at": "%s"\n}\n' "$PAGE_URL" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-status.json
-          git add deployment-status.json
-          git commit -m "Record successful Pages deployment [skip ci]" || exit 0
-          git push origin main
