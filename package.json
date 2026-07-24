@@ -1,8 +1,12 @@
 {
   "name": "kaoyanjihua",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "setup:accounts": "node scripts/setup-accounts.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0"
   }
 }
