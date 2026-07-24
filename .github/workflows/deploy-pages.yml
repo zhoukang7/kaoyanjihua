@@ -2,7 +2,7 @@ name: Deploy study dashboard
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -10,13 +10,51 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare static site
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          LOGIN_EMAIL_DOMAIN: ${{ vars.LOGIN_EMAIL_DOMAIN }}
+        run: |
+          test -f index.html
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+          cat > _site/config.js <<CONFIG
+          window.STUDY_APP_CONFIG = {
+            supabaseUrl: "${SUPABASE_URL}",
+            supabasePublishableKey: "${SUPABASE_PUBLISHABLE_KEY}",
+            loginEmailDomain: "${LOGIN_EMAIL_DOMAIN:-study822.example.com}"
+          };
+          CONFIG
+          echo "Site prepared. Supabase configuration present: $([ -n "$SUPABASE_URL" ] && echo yes || echo no)"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: .
-      - uses: actions/deploy-pages@v4
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
