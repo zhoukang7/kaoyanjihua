@@ -3,10 +3,12 @@ name: Deploy study dashboard
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "deployment-status.json"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -58,3 +60,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Record successful deployment
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '{\n  "status": "success",\n  "page_url": "%s",\n  "source_sha": "%s",\n  "deployed_at": "%s"\n}\n' "$PAGE_URL" "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-status.json
+          git add deployment-status.json
+          git commit -m "Record successful Pages deployment [skip ci]" || exit 0
+          git push origin main
