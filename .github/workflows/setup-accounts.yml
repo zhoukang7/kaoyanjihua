@@ -3,16 +3,40 @@ name: Initialize study accounts
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
-      - run: npm install
-      - run: npm run setup:accounts
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Validate configuration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STUDY_ADMIN_PASSWORD: ${{ secrets.STUDY_ADMIN_PASSWORD }}
+          STUDY_USER1_PASSWORD: ${{ secrets.STUDY_USER1_PASSWORD }}
+          STUDY_USER2_PASSWORD: ${{ secrets.STUDY_USER2_PASSWORD }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "Missing secret: SUPABASE_URL"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "Missing secret: SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -n "$STUDY_ADMIN_PASSWORD" || { echo "Missing secret: STUDY_ADMIN_PASSWORD"; exit 1; }
+          test -n "$STUDY_USER1_PASSWORD" || { echo "Missing secret: STUDY_USER1_PASSWORD"; exit 1; }
+          test -n "$STUDY_USER2_PASSWORD" || { echo "Missing secret: STUDY_USER2_PASSWORD"; exit 1; }
+
+      - name: Install dependencies
+        run: npm install --omit=dev
+
+      - name: Create or update accounts
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -20,3 +44,4 @@ jobs:
           STUDY_ADMIN_PASSWORD: ${{ secrets.STUDY_ADMIN_PASSWORD }}
           STUDY_USER1_PASSWORD: ${{ secrets.STUDY_USER1_PASSWORD }}
           STUDY_USER2_PASSWORD: ${{ secrets.STUDY_USER2_PASSWORD }}
+        run: npm run setup:accounts
