@@ -1,0 +1,8 @@
+{
+  "name": "kaoyanjihua",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "setup:accounts": "node scripts/setup-accounts.mjs"
+  }
+}
