@@ -19,6 +19,7 @@
 
   const q=id=>document.getElementById(id);
   const isOwner=()=>profile?.role==='owner';
+  const setText=(element,text)=>{if(element&&element.textContent!==text)element.textContent=text};
   const formatTime=value=>value?new Intl.DateTimeFormat('zh-CN',{
     year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'
   }).format(new Date(value)):'—';
@@ -41,6 +42,9 @@
 
   const userLedger=()=>ledger.filter(item=>item.username==='user_1');
   const availablePoints=()=>Math.max(0,userLedger().reduce((sum,item)=>sum+Number(item.amount||0),0));
+  const redeemedPoints=()=>userLedger()
+    .filter(item=>item.entry_type==='redemption'&&Number(item.amount)<0)
+    .reduce((sum,item)=>sum+Math.abs(Number(item.amount||0)),0);
   const deductedPoints=()=>userLedger()
     .filter(item=>item.entry_type==='deduction'&&Number(item.amount)<0)
     .reduce((sum,item)=>sum+Math.abs(Number(item.amount||0)),0);
@@ -117,13 +121,16 @@
   }
 
   function render(){
+    observer?.disconnect();
     mount();
     q('manualDeductionPanel')?.classList.toggle('hidden',!isOwner());
 
     const deducted=deductedPoints();
+    const redeemed=redeemedPoints();
     const deductible=deductiblePoints();
     const pending=pendingPoints();
-    if(q('deductedPointValue'))q('deductedPointValue').textContent=String(deducted);
+    setText(q('deductedPointValue'),String(deducted));
+    setText(q('redeemedPointValue'),String(redeemed));
 
     const input=q('manualDeductionAmount');
     const button=q('manualDeductionButton');
@@ -136,11 +143,11 @@
 
     const hint=q('manualDeductionHint');
     if(hint){
-      hint.textContent=deductible>0
+      setText(hint,deductible>0
         ?`当前最多可扣除 ${deductible} 分；默认原因为“未完成任务”。${pending?` 待审核兑换已预留 ${pending} 分。`:''}`
         :pending>0
           ?'当前积分已全部被待审核兑换占用，请先处理兑换申请。'
-          :'当前没有可扣除积分。';
+          :'当前没有可扣除积分。');
     }
 
     const list=q('pointDeductionHistory');
@@ -151,6 +158,8 @@
       if(entries.length)list.replaceChildren(...entries.map(historyRow));
       else list.innerHTML='<div class="task-review-empty">暂无管理员扣除记录。</div>';
     }
+
+    observe();
   }
 
   async function deductPoints(){
@@ -208,6 +217,12 @@
     render();
   }
 
+  function observe(){
+    if(!observer)observer=new MutationObserver(schedule);
+    observer.disconnect();
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
+  }
+
   function schedule(){
     clearTimeout(timer);
     timer=setTimeout(()=>{
@@ -243,8 +258,7 @@
   }
 
   function start(){
-    observer=new MutationObserver(schedule);
-    observer.observe(document.body,{childList:true,subtree:true});
+    observe();
     client.auth.getSession().then(({data})=>initialize(data.session));
     client.auth.onAuthStateChange((event,session)=>{
       if(event==='SIGNED_IN'||event==='SIGNED_OUT')setTimeout(()=>initialize(session),0);
