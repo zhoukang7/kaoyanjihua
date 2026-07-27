@@ -1,39 +1,563 @@
 (()=>{
   const config=window.STUDY_APP_CONFIG||{};
   if(!window.supabase||!config.supabaseUrl||!config.supabasePublishableKey)return;
-  const client=window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true}});
-  const dailyTasks=[{key:'d_words',label:'背诵 50 个新词并复习旧词'},{key:'d_math',label:'660题完成 25 题并标记错因'},{key:'d_read',label:'精读 1 篇真题阅读'},{key:'d_ctl',label:'学习教材 18 页并完成 5 道题'},{key:'d_pol',label:'听 1 节课程并做 20 道选择题'},{key:'d_review',label:'整理错题与明日计划'}];
-  const weeklyTasks=[{key:'w_math',label:'数学完成 150 道强化题'},{key:'w_eng',label:'精读 6 篇英语真题阅读'},{key:'w_pol',label:'完成马原第一章及配套题'},{key:'w_ctl',label:'完成 822 教材第一、二章'},{key:'w_review',label:'完成一次全科周复盘'}];
-  const statusLabels={pending:'待审核',approved:'已通过',rejected:'未通过'};
-  let currentUser=null,profile=null,submissions=[],realtimeChannel=null,taskObserver=null,applyTimer=null,toastTimer=null;
+
+  const client=window.supabase.createClient(
+    config.supabaseUrl,
+    config.supabasePublishableKey,
+    {auth:{persistSession:true,autoRefreshToken:true}}
+  );
+
+  const dailyTasks=[
+    {key:'d_words',label:'背诵 50 个新词并复习旧词'},
+    {key:'d_math',label:'660题完成 25 题并标记错因'},
+    {key:'d_read',label:'精读 1 篇真题阅读'},
+    {key:'d_ctl',label:'学习教材 18 页并完成 5 道题'},
+    {key:'d_pol',label:'听 1 节课程并做 20 道选择题'},
+    {key:'d_review',label:'整理错题与明日计划'}
+  ];
+
+  const weeklyTasks=[
+    {key:'w_math',label:'数学完成 150 道强化题'},
+    {key:'w_eng',label:'精读 6 篇英语真题阅读'},
+    {key:'w_pol',label:'完成马原第一章及配套题'},
+    {key:'w_ctl',label:'完成 822 教材第一、二章'},
+    {key:'w_review',label:'完成一次全科周复盘'}
+  ];
+
+  const statusLabels={
+    pending:'待审核',
+    approved:'已通过',
+    rejected:'未通过'
+  };
+
+  let currentUser=null;
+  let profile=null;
+  let submissions=[];
+  let realtimeChannel=null;
+  let taskObserver=null;
+  let applyTimer=null;
+  let toastTimer=null;
+
   const q=id=>document.getElementById(id);
-  const localDateKey=(date=new Date())=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  const weekKey=()=>{const date=new Date(),weekday=date.getDay()||7;date.setDate(date.getDate()-weekday+1);return localDateKey(date)};
-  const periodKey=type=>type==='daily'?localDateKey():weekKey();
-  const isOwner=()=>profile?.role==='owner';
-  const isUser1=()=>profile?.username==='user_1';
-  const isUser2=()=>profile?.username==='user_2';
-  function notify(message){let toast=q('taskReviewToast');if(!toast){toast=document.createElement('div');toast.id='taskReviewToast';toast.className='task-review-toast';toast.setAttribute('role','status');toast.setAttribute('aria-live','polite');document.body.appendChild(toast)}clearTimeout(toastTimer);toast.textContent=message;toast.classList.add('show');toastTimer=setTimeout(()=>toast.classList.remove('show'),2800)}
-  const formatTime=value=>new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(value));
-  const taskLabel=(type,key)=>(type==='daily'?dailyTasks:weeklyTasks).find(task=>task.key===key)?.label||key;
-  const currentSubmission=(type,key)=>submissions.find(item=>item.username==='user_1'&&item.task_type===type&&item.task_key===key&&item.period_key===periodKey(type));
-  const user1Points=()=>submissions.filter(item=>item.username==='user_1'&&item.task_type==='daily'&&item.status==='approved').reduce((sum,item)=>sum+Number(item.points_awarded||0),0);
-  function mountPanel(){if(q('taskReviewSection'))return;const app=q('app');if(!app)return;const commentsSection=q('commentsSection'),footer=app.querySelector('footer'),section=document.createElement('section');section.id='taskReviewSection';section.className='task-review-section';section.innerHTML=`<div class="task-review-head"><div><h2>任务审核与积分</h2><p id="taskReviewDescription">正在读取账号权限和审核记录。</p></div><span id="taskReviewAccess" class="task-review-access">正在验证</span></div><div class="task-review-metrics"><article class="task-review-metric"><span>user_1 总积分</span><strong id="user1Points">0</strong><small>每日任务审核通过后，每项 +1</small></article><article class="task-review-metric"><span>待审核</span><strong id="pendingReviewCount">0</strong><small>每日与每周任务提交</small></article><article class="task-review-metric"><span>本日已通过</span><strong id="approvedTodayCount">0</strong><small>仅统计今日每日任务</small></article></div><article id="adminReviewCard" class="task-review-card hidden"><div class="task-review-card-head"><div><h3>管理员审核</h3><p>审核通过会同步勾选主看板；每日任务同时增加 1 积分。</p></div><button id="refreshTaskReviews" class="task-review-ghost" type="button">刷新</button></div><div id="pendingReviewList" class="task-review-list"></div></article><div id="taskReviewNotice" class="task-review-notice"></div>`;const anchor=commentsSection||footer;if(anchor)app.insertBefore(section,anchor);else app.appendChild(section);q('refreshTaskReviews')?.addEventListener('click',loadSubmissions)}
-  function renderPanel(){mountPanel();const pending=submissions.filter(item=>item.status==='pending'),today=localDateKey(),approvedToday=submissions.filter(item=>item.task_type==='daily'&&item.period_key===today&&item.status==='approved');q('user1Points').textContent=String(user1Points());q('pendingReviewCount').textContent=String(pending.length);q('approvedTodayCount').textContent=String(approvedToday.length);const access=q('taskReviewAccess'),description=q('taskReviewDescription'),notice=q('taskReviewNotice'),adminCard=q('adminReviewCard');if(isOwner()){access.textContent='管理员 · 可审核';description.textContent='user_1 的勾选先进入待审核；通过后才同步任务状态和积分。';notice.textContent='管理员原有的学习进度编辑权限保持不变。';adminCard.classList.remove('hidden');renderPendingReviews()}else if(isUser1()){access.textContent='user_1 · 可提交';description.textContent='你可以勾选每日任务和每周任务。管理员审核通过前，任务显示为待审核。';notice.textContent='每日任务通过审核后每项增加 1 积分；每周任务不计积分。其他学习进度仍为只读。';adminCard.classList.add('hidden')}else{access.textContent='user_2 · 只读';description.textContent='user_2 保持只读，可以查看任务、审核状态和积分，但不能勾选任务。';notice.textContent='本次权限调整仅向 user_1 开放每日任务和每周任务的提交交互。';adminCard.classList.add('hidden')}}
-  function renderPendingReviews(){const list=q('pendingReviewList');if(!list)return;const pending=submissions.filter(item=>item.status==='pending').sort((a,b)=>new Date(a.submitted_at)-new Date(b.submitted_at));if(!pending.length){list.innerHTML='<div class="task-review-empty">目前没有待审核任务。</div>';return}list.replaceChildren(...pending.map(item=>{const row=document.createElement('article');row.className='task-review-item';const main=document.createElement('div');main.className='task-review-item-main';const title=document.createElement('strong');title.textContent=taskLabel(item.task_type,item.task_key);const meta=document.createElement('span');meta.textContent=`${item.task_type==='daily'?'每日任务':'每周任务'} · ${item.period_key} · ${formatTime(item.submitted_at)}`;main.append(title,meta);const actions=document.createElement('div');actions.className='task-review-actions';const reject=document.createElement('button');reject.type='button';reject.className='task-review-danger';reject.textContent='不通过';reject.addEventListener('click',()=>reviewSubmission(item,'rejected'));const approve=document.createElement('button');approve.type='button';approve.className='task-review-primary';approve.textContent=item.task_type==='daily'?'通过并 +1 分':'通过';approve.addEventListener('click',()=>reviewSubmission(item,'approved'));actions.append(reject,approve);row.append(main,actions);return row}))}
-  async function reviewSubmission(item,decision){let note=null;if(decision==='rejected'){note=window.prompt('可填写不通过原因（可留空）：','');if(note===null)return}else if(!window.confirm(`确认通过“${taskLabel(item.task_type,item.task_key)}”？`))return;const {error}=await client.rpc('review_task_completion',{p_submission_id:item.id,p_decision:decision,p_review_note:note||null});if(error){notify(error.message);return}notify(decision==='approved'?'审核通过，任务状态已同步':'已标记为未通过');await loadSubmissions()}
-  async function submitTask(type,key){const {error}=await client.rpc('submit_task_completion',{p_task_type:type,p_task_key:key,p_period_key:periodKey(type)});if(error){notify(error.message);return false}notify('已提交，等待管理员审核');await loadSubmissions();return true}
-  async function withdrawTask(type,key){const {error}=await client.rpc('withdraw_task_completion',{p_task_type:type,p_task_key:key,p_period_key:periodKey(type)});if(error){notify(error.message);return false}notify('已撤回待审核任务');await loadSubmissions();return true}
-  function statusBadge(row,item,baseChecked,type){row.querySelector('.task-submission-state')?.remove();const content=row.children[1];if(!content)return;let text='',className='';if(item){text=statusLabels[item.status]||item.status;className=` status-${item.status}`;if(item.status==='approved'&&type==='daily')text+=' · +1积分';if(item.status==='rejected'&&item.review_note)text+=` · ${item.review_note}`}else if(baseChecked){text='主看板已完成';className=' status-approved'}if(!text)return;const badge=document.createElement('span');badge.className=`task-submission-state${className}`;badge.textContent=text;content.appendChild(badge)}
-  function bindUser1Input(row,type,task){const oldInput=row.querySelector('input[type="checkbox"]');if(!oldInput)return;const item=currentSubmission(type,task.key),baseChecked=oldInput.checked;let input=oldInput;if(input.dataset.taskReviewBound!=='1'){input=oldInput.cloneNode(true);input.dataset.taskReviewBound='1';oldInput.replaceWith(input);input.addEventListener('change',async()=>{const desired=input.checked;input.disabled=true;const success=desired?await submitTask(type,task.key):await withdrawTask(type,task.key);if(!success)input.checked=!desired;scheduleApply()})}if(item?.status==='pending'){input.checked=true;input.disabled=false;input.title='已提交，取消勾选可在审核前撤回'}else if(item?.status==='approved'){input.checked=true;input.disabled=true;input.title='管理员已审核通过'}else if(item?.status==='rejected'){input.checked=false;input.disabled=false;input.title='未通过，可重新勾选提交'}else if(baseChecked){input.checked=true;input.disabled=true;input.title='主看板已完成'}else{input.checked=false;input.disabled=false;input.title='勾选后提交管理员审核'}row.classList.remove('readonly');statusBadge(row,item,baseChecked,type)}
-  function decorateAdminRow(row,type,task){row.querySelector('.task-submission-state')?.remove();const item=currentSubmission(type,task.key);if(item?.status==='pending')statusBadge(row,item,row.querySelector('input[type="checkbox"]')?.checked,type)}
-  function keepReadOnly(row){const input=row.querySelector('input[type="checkbox"]');if(input)input.disabled=true;row.querySelector('.task-submission-state')?.remove()}
-  function applyTaskPermissions(){if(!profile)return;if(isUser1()){if(q('access'))q('access').textContent='user_1 · 可提交任务';if(q('role'))q('role').textContent='任务提交账号'}else if(isUser2()){if(q('access'))q('access').textContent='user_2 · 只读';if(q('role'))q('role').textContent='只读用户'}const dailyRows=[...(q('daily')?.querySelectorAll('.task')||[])],weeklyRows=[...(q('weekly')?.querySelectorAll('.task')||[])];dailyTasks.forEach((task,index)=>{const row=dailyRows[index];if(!row)return;if(isUser1())bindUser1Input(row,'daily',task);else if(isOwner())decorateAdminRow(row,'daily',task);else keepReadOnly(row)});weeklyTasks.forEach((task,index)=>{const row=weeklyRows[index];if(!row)return;if(isUser1())bindUser1Input(row,'weekly',task);else if(isOwner())decorateAdminRow(row,'weekly',task);else keepReadOnly(row)})}
-  function scheduleApply(){clearTimeout(applyTimer);applyTimer=setTimeout(applyTaskPermissions,40)}
-  function observeTasks(){taskObserver?.disconnect();taskObserver=new MutationObserver(scheduleApply);['daily','weekly'].forEach(id=>{const container=q(id);if(container)taskObserver.observe(container,{childList:true,subtree:true})});scheduleApply()}
-  async function loadSubmissions(){const {data,error}=await client.from('task_submissions').select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,points_awarded,submitted_at,reviewed_at').order('submitted_at',{ascending:false}).limit(500);if(error){notify(error.message);return}submissions=data||[];renderPanel();scheduleApply()}
-  function cleanup(){currentUser=null;profile=null;submissions=[];taskObserver?.disconnect();taskObserver=null;if(realtimeChannel){client.removeChannel(realtimeChannel);realtimeChannel=null}q('taskReviewSection')?.classList.add('hidden')}
-  async function initialize(session){if(!session){cleanup();return}currentUser=session.user;const {data,error}=await client.from('profiles').select('role,username,display_name').eq('id',currentUser.id).single();if(error){notify(error.message);return}profile=data;mountPanel();q('taskReviewSection')?.classList.remove('hidden');await loadSubmissions();observeTasks();if(realtimeChannel)client.removeChannel(realtimeChannel);realtimeChannel=client.channel('task-submissions-ui').on('postgres_changes',{event:'*',schema:'public',table:'task_submissions'},()=>loadSubmissions()).subscribe()}
-  function start(){client.auth.getSession().then(({data})=>initialize(data.session));client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_IN'||event==='SIGNED_OUT')setTimeout(()=>initialize(session),0)})}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+
+  function localDateKey(date=new Date()){
+    const year=date.getFullYear();
+    const month=String(date.getMonth()+1).padStart(2,'0');
+    const day=String(date.getDate()).padStart(2,'0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function weekKey(){
+    const date=new Date();
+    const weekday=date.getDay()||7;
+    date.setDate(date.getDate()-weekday+1);
+    return localDateKey(date);
+  }
+
+  function periodKey(type){
+    return type==='daily'?localDateKey():weekKey();
+  }
+
+  function isOwner(){
+    return profile?.role==='owner';
+  }
+
+  function isUser1(){
+    return profile?.username==='user_1';
+  }
+
+  function isUser2(){
+    return profile?.username==='user_2';
+  }
+
+  function notify(message){
+    let toast=q('taskReviewToast');
+    if(!toast){
+      toast=document.createElement('div');
+      toast.id='taskReviewToast';
+      toast.className='task-review-toast';
+      toast.setAttribute('role','status');
+      toast.setAttribute('aria-live','polite');
+      document.body.appendChild(toast);
+    }
+    clearTimeout(toastTimer);
+    toast.textContent=message;
+    toast.classList.add('show');
+    toastTimer=setTimeout(()=>toast.classList.remove('show'),2800);
+  }
+
+  function formatTime(value){
+    return new Intl.DateTimeFormat('zh-CN',{
+      month:'numeric',
+      day:'numeric',
+      hour:'2-digit',
+      minute:'2-digit'
+    }).format(new Date(value));
+  }
+
+  function taskLabel(type,key){
+    const collection=type==='daily'?dailyTasks:weeklyTasks;
+    return collection.find(task=>task.key===key)?.label||key;
+  }
+
+  function currentSubmission(type,key){
+    const period=periodKey(type);
+    return submissions.find(item=>
+      item.username==='user_1'&&
+      item.task_type===type&&
+      item.task_key===key&&
+      item.period_key===period
+    );
+  }
+
+  function user1Points(){
+    return submissions
+      .filter(item=>
+        item.username==='user_1'&&
+        item.task_type==='daily'&&
+        item.status==='approved'
+      )
+      .reduce((sum,item)=>sum+Number(item.points_awarded||0),0);
+  }
+
+  function mountPanel(){
+    if(q('taskReviewSection'))return;
+    const app=q('app');
+    if(!app)return;
+
+    const commentsSection=q('commentsSection');
+    const footer=app.querySelector('footer');
+    const section=document.createElement('section');
+    section.id='taskReviewSection';
+    section.className='task-review-section';
+    section.innerHTML=`
+      <div class="task-review-head">
+        <div>
+          <h2>任务审核与积分</h2>
+          <p id="taskReviewDescription">正在读取账号权限和审核记录。</p>
+        </div>
+        <span id="taskReviewAccess" class="task-review-access">正在验证</span>
+      </div>
+
+      <div class="task-review-metrics">
+        <article class="task-review-metric">
+          <span>user_1 总积分</span>
+          <strong id="user1Points">0</strong>
+          <small>每日任务审核通过后，每项 +1</small>
+        </article>
+        <article class="task-review-metric">
+          <span>待审核</span>
+          <strong id="pendingReviewCount">0</strong>
+          <small>每日与每周任务提交</small>
+        </article>
+        <article class="task-review-metric">
+          <span>本日已通过</span>
+          <strong id="approvedTodayCount">0</strong>
+          <small>仅统计今日每日任务</small>
+        </article>
+      </div>
+
+      <article id="adminReviewCard" class="task-review-card hidden">
+        <div class="task-review-card-head">
+          <div>
+            <h3>管理员审核</h3>
+            <p>审核通过会同步勾选主看板；每日任务同时增加 1 积分。</p>
+          </div>
+          <button id="refreshTaskReviews" class="task-review-ghost" type="button">刷新</button>
+        </div>
+        <div id="pendingReviewList" class="task-review-list"></div>
+      </article>
+
+      <div id="taskReviewNotice" class="task-review-notice"></div>
+    `;
+
+    const anchor=commentsSection||footer;
+    if(anchor)app.insertBefore(section,anchor);
+    else app.appendChild(section);
+
+    q('refreshTaskReviews')?.addEventListener('click',loadSubmissions);
+  }
+
+  function renderPanel(){
+    mountPanel();
+    const pending=submissions.filter(item=>item.status==='pending');
+    const today=localDateKey();
+    const approvedToday=submissions.filter(item=>
+      item.task_type==='daily'&&
+      item.period_key===today&&
+      item.status==='approved'
+    );
+
+    q('user1Points').textContent=String(user1Points());
+    q('pendingReviewCount').textContent=String(pending.length);
+    q('approvedTodayCount').textContent=String(approvedToday.length);
+
+    const access=q('taskReviewAccess');
+    const description=q('taskReviewDescription');
+    const notice=q('taskReviewNotice');
+    const adminCard=q('adminReviewCard');
+
+    if(isOwner()){
+      access.textContent='管理员 · 可审核';
+      description.textContent='user_1 的勾选先进入待审核；通过后才同步任务状态和积分。';
+      notice.textContent='管理员原有的学习进度编辑权限保持不变。';
+      adminCard.classList.remove('hidden');
+      renderPendingReviews();
+    }else if(isUser1()){
+      access.textContent='user_1 · 可提交';
+      description.textContent='你可以勾选每日任务和每周任务。管理员审核通过前，任务显示为待审核。';
+      notice.textContent='每日任务通过审核后每项增加 1 积分；每周任务不计积分。其他学习进度仍为只读。';
+      adminCard.classList.add('hidden');
+    }else{
+      access.textContent='user_2 · 只读';
+      description.textContent='user_2 保持只读，可以查看任务、审核状态和积分，但不能勾选任务。';
+      notice.textContent='本次权限调整仅向 user_1 开放每日任务和每周任务的提交交互。';
+      adminCard.classList.add('hidden');
+    }
+  }
+
+  function renderPendingReviews(){
+    const list=q('pendingReviewList');
+    if(!list)return;
+
+    const pending=submissions
+      .filter(item=>item.status==='pending')
+      .sort((a,b)=>new Date(a.submitted_at)-new Date(b.submitted_at));
+
+    if(!pending.length){
+      list.innerHTML='<div class="task-review-empty">目前没有待审核任务。</div>';
+      return;
+    }
+
+    list.replaceChildren(...pending.map(item=>{
+      const row=document.createElement('article');
+      row.className='task-review-item';
+
+      const main=document.createElement('div');
+      main.className='task-review-item-main';
+
+      const title=document.createElement('strong');
+      title.textContent=taskLabel(item.task_type,item.task_key);
+
+      const meta=document.createElement('span');
+      meta.textContent=`${item.task_type==='daily'?'每日任务':'每周任务'} · ${item.period_key} · ${formatTime(item.submitted_at)}`;
+
+      main.append(title,meta);
+
+      const actions=document.createElement('div');
+      actions.className='task-review-actions';
+
+      const reject=document.createElement('button');
+      reject.type='button';
+      reject.className='task-review-danger';
+      reject.textContent='不通过';
+      reject.addEventListener('click',()=>reviewSubmission(item,'rejected'));
+
+      const approve=document.createElement('button');
+      approve.type='button';
+      approve.className='task-review-primary';
+      approve.textContent=item.task_type==='daily'?'通过并 +1 分':'通过';
+      approve.addEventListener('click',()=>reviewSubmission(item,'approved'));
+
+      actions.append(reject,approve);
+      row.append(main,actions);
+      return row;
+    }));
+  }
+
+  async function reviewSubmission(item,decision){
+    let note=null;
+    if(decision==='rejected'){
+      note=window.prompt('可填写不通过原因（可留空）：','');
+      if(note===null)return;
+    }else if(!window.confirm(`确认通过“${taskLabel(item.task_type,item.task_key)}”？`)){
+      return;
+    }
+
+    const {error}=await client.rpc('review_task_completion',{
+      p_submission_id:item.id,
+      p_decision:decision,
+      p_review_note:note||null
+    });
+
+    if(error){
+      notify(error.message);
+      return;
+    }
+
+    notify(decision==='approved'?'审核通过，任务状态已同步':'已标记为未通过');
+    await loadSubmissions();
+  }
+
+  async function submitTask(type,key){
+    const {error}=await client.rpc('submit_task_completion',{
+      p_task_type:type,
+      p_task_key:key,
+      p_period_key:periodKey(type)
+    });
+
+    if(error){
+      notify(error.message);
+      return false;
+    }
+
+    notify('已提交，等待管理员审核');
+    await loadSubmissions();
+    return true;
+  }
+
+  async function withdrawTask(type,key){
+    const {error}=await client.rpc('withdraw_task_completion',{
+      p_task_type:type,
+      p_task_key:key,
+      p_period_key:periodKey(type)
+    });
+
+    if(error){
+      notify(error.message);
+      return false;
+    }
+
+    notify('已撤回待审核任务');
+    await loadSubmissions();
+    return true;
+  }
+
+  function statusBadge(row,item,baseChecked,type){
+    const content=row.children[1];
+    if(!content)return;
+
+    let text='';
+    let className='';
+
+    if(item){
+      text=statusLabels[item.status]||item.status;
+      className=` status-${item.status}`;
+      if(item.status==='approved'&&type==='daily')text+=' · +1积分';
+      if(item.status==='rejected'&&item.review_note)text+=` · ${item.review_note}`;
+    }else if(baseChecked){
+      text='主看板已完成';
+      className=' status-approved';
+    }
+
+    let badge=row.querySelector('.task-submission-state');
+    if(!text){
+      badge?.remove();
+      return;
+    }
+
+    if(!badge){
+      badge=document.createElement('span');
+      content.appendChild(badge);
+    }
+
+    const nextClass=`task-submission-state${className}`;
+    if(badge.className!==nextClass)badge.className=nextClass;
+    if(badge.textContent!==text)badge.textContent=text;
+  }
+
+  function bindUser1Input(row,type,task){
+    const oldInput=row.querySelector('input[type="checkbox"]');
+    if(!oldInput)return;
+
+    const item=currentSubmission(type,task.key);
+    let input=oldInput;
+
+    if(input.dataset.taskReviewBound!=='1'){
+      input=oldInput.cloneNode(true);
+      input.dataset.taskReviewBound='1';
+      input.dataset.dashboardChecked=oldInput.checked?'1':'0';
+      oldInput.replaceWith(input);
+
+      input.addEventListener('change',async()=>{
+        const desired=input.checked;
+        input.disabled=true;
+
+        const success=desired
+          ?await submitTask(type,task.key)
+          :await withdrawTask(type,task.key);
+
+        if(!success)input.checked=!desired;
+        scheduleApply();
+      });
+    }
+
+    const baseChecked=input.dataset.dashboardChecked==='1';
+
+    if(item?.status==='pending'){
+      input.checked=true;
+      input.disabled=false;
+      input.title='已提交，取消勾选可在审核前撤回';
+    }else if(item?.status==='approved'){
+      input.checked=true;
+      input.disabled=true;
+      input.title='管理员已审核通过';
+    }else if(item?.status==='rejected'){
+      input.checked=false;
+      input.disabled=false;
+      input.title='未通过，可重新勾选提交';
+    }else if(baseChecked){
+      input.checked=true;
+      input.disabled=true;
+      input.title='主看板已完成';
+    }else{
+      input.checked=false;
+      input.disabled=false;
+      input.title='勾选后提交管理员审核';
+    }
+
+    row.classList.remove('readonly');
+    statusBadge(row,item,baseChecked,type);
+  }
+
+  function decorateAdminRow(row,type,task){
+    const item=currentSubmission(type,task.key);
+    statusBadge(
+      row,
+      item?.status==='pending'?item:null,
+      false,
+      type
+    );
+  }
+
+  function keepReadOnly(row){
+    const input=row.querySelector('input[type="checkbox"]');
+    if(input)input.disabled=true;
+    row.querySelector('.task-submission-state')?.remove();
+  }
+
+  function applyTaskPermissions(){
+    if(!profile)return;
+
+    if(isUser1()){
+      if(q('access'))q('access').textContent='user_1 · 可提交任务';
+      if(q('role'))q('role').textContent='任务提交账号';
+    }else if(isUser2()){
+      if(q('access'))q('access').textContent='user_2 · 只读';
+      if(q('role'))q('role').textContent='只读用户';
+    }
+
+    const dailyRows=[...(q('daily')?.querySelectorAll('.task')||[])];
+    const weeklyRows=[...(q('weekly')?.querySelectorAll('.task')||[])];
+
+    dailyTasks.forEach((task,index)=>{
+      const row=dailyRows[index];
+      if(!row)return;
+      if(isUser1())bindUser1Input(row,'daily',task);
+      else if(isOwner())decorateAdminRow(row,'daily',task);
+      else keepReadOnly(row);
+    });
+
+    weeklyTasks.forEach((task,index)=>{
+      const row=weeklyRows[index];
+      if(!row)return;
+      if(isUser1())bindUser1Input(row,'weekly',task);
+      else if(isOwner())decorateAdminRow(row,'weekly',task);
+      else keepReadOnly(row);
+    });
+  }
+
+  function scheduleApply(){
+    clearTimeout(applyTimer);
+    applyTimer=setTimeout(applyTaskPermissions,40);
+  }
+
+  function observeTasks(){
+    taskObserver?.disconnect();
+    taskObserver=new MutationObserver(scheduleApply);
+
+    ['daily','weekly'].forEach(id=>{
+      const container=q(id);
+      if(container){
+        taskObserver.observe(container,{childList:true,subtree:true});
+      }
+    });
+
+    scheduleApply();
+  }
+
+  async function loadSubmissions(){
+    const {data,error}=await client
+      .from('task_submissions')
+      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,points_awarded,submitted_at,reviewed_at')
+      .order('submitted_at',{ascending:false})
+      .limit(500);
+
+    if(error){
+      notify(error.message);
+      return;
+    }
+
+    submissions=data||[];
+    renderPanel();
+    scheduleApply();
+  }
+
+  function cleanup(){
+    currentUser=null;
+    profile=null;
+    submissions=[];
+    taskObserver?.disconnect();
+    taskObserver=null;
+
+    if(realtimeChannel){
+      client.removeChannel(realtimeChannel);
+      realtimeChannel=null;
+    }
+
+    q('taskReviewSection')?.classList.add('hidden');
+  }
+
+  async function initialize(session){
+    if(!session){
+      cleanup();
+      return;
+    }
+
+    currentUser=session.user;
+
+    const {data,error}=await client
+      .from('profiles')
+      .select('role,username,display_name')
+      .eq('id',currentUser.id)
+      .single();
+
+    if(error){
+      notify(error.message);
+      return;
+    }
+
+    profile=data;
+    mountPanel();
+    q('taskReviewSection')?.classList.remove('hidden');
+
+    await loadSubmissions();
+    observeTasks();
+
+    if(realtimeChannel)client.removeChannel(realtimeChannel);
+    realtimeChannel=client
+      .channel('task-submissions-ui')
+      .on('postgres_changes',{
+        event:'*',
+        schema:'public',
+        table:'task_submissions'
+      },()=>loadSubmissions())
+      .subscribe();
+  }
+
+  function start(){
+    client.auth.getSession().then(({data})=>initialize(data.session));
+    client.auth.onAuthStateChange((event,session)=>{
+      if(event==='SIGNED_IN'||event==='SIGNED_OUT'){
+        setTimeout(()=>initialize(session),0);
+      }
+    });
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',start,{once:true});
+  }else{
+    start();
+  }
 })();
