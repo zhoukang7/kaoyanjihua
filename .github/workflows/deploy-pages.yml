@@ -32,6 +32,8 @@ jobs:
         run: |
           set -euo pipefail
           test -f index.html
+          test -f comments.js
+          test -f comments.css
           if [ -z "$SUPABASE_URL" ]; then
             echo "::error::Missing repository secret: SUPABASE_URL"
             exit 1
@@ -41,7 +43,7 @@ jobs:
             exit 1
           fi
           mkdir -p _site
-          cp index.html _site/index.html
+          cp index.html comments.js comments.css _site/
           touch _site/.nojekyll
           cat > _site/config.js <<CONFIG
           window.STUDY_APP_CONFIG = {
@@ -49,6 +51,18 @@ jobs:
             supabasePublishableKey: "${SUPABASE_PUBLISHABLE_KEY}",
             loginEmailDomain: "${LOGIN_EMAIL_DOMAIN:-study822.example.com}"
           };
+
+          (() => {
+            const stylesheet = document.createElement("link");
+            stylesheet.rel = "stylesheet";
+            stylesheet.href = "./comments.css";
+            document.head.appendChild(stylesheet);
+
+            const script = document.createElement("script");
+            script.src = "./comments.js";
+            script.defer = true;
+            document.head.appendChild(script);
+          })();
           CONFIG
           echo "Static site prepared successfully."
 
