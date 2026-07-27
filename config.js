@@ -7,14 +7,14 @@ window.STUDY_APP_CONFIG = {
 };
 
 (() => {
-  ["comments.css", "task-review.css", "points-control.css"].forEach((href) => {
+  ["comments.css", "task-review.css", "points-control.css", "reward-presets.css"].forEach((href) => {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
     stylesheet.href = `./${href}`;
     document.head.appendChild(stylesheet);
   });
 
-  ["comments.js", "task-review.js", "points-control.js"].forEach((src) => {
+  ["comments.js", "task-review.js", "points-control.js", "reward-presets.js"].forEach((src) => {
     const script = document.createElement("script");
     script.src = `./${src}`;
     script.defer = true;
