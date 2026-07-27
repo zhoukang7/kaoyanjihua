@@ -61,6 +61,24 @@ create unique index if not exists point_ledger_source_redemption_unique
 create index if not exists point_ledger_user_created_idx
   on public.point_ledger (user_id, created_at desc);
 
+-- 清理旧版按任务迁移到积分账本的记录，确保积分不再受任务数量影响。
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'point_ledger'
+      and column_name = 'source_task_submission_id'
+  ) then
+    execute 'delete from public.point_ledger where source_task_submission_id is not null';
+  end if;
+end
+$$;
+
+alter table public.point_ledger
+  drop column if exists source_task_submission_id;
+
 alter table public.point_ledger replica identity full;
 
 -- 可用积分完全来自独立积分账本：
