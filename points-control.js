@@ -36,6 +36,9 @@
     month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'
   }).format(new Date(value));
   const taskLabel=key=>dailyTasks.find(task=>task.key===key)?.label||key;
+  const setText=(element,text)=>{
+    if(element&&element.textContent!==text)element.textContent=text;
+  };
 
   function notify(message){
     let toast=q('pointsControlToast');
@@ -83,29 +86,23 @@
     const adminCard=q('adminReviewCard');
     const notice=q('taskReviewNotice');
 
-    if(description&&isOwner()){
-      description.textContent='user_1 的所有勾选必须审核；审核通过后同步任务和学习进度，积分由管理员另行发放。';
-    }else if(description&&profile?.username==='user_1'){
-      description.textContent='你可以勾选每日任务和每周任务。管理员审核通过后任务才算完成。';
+    if(isOwner()){
+      setText(description,'user_1 的所有勾选必须审核；审核通过后同步任务和学习进度，积分由管理员另行发放。');
+      setText(notice,'审核与积分发放是两个独立操作。管理员可在下方对已通过的每日任务单独发放 1 积分。');
+    }else if(profile?.username==='user_1'){
+      setText(description,'你可以勾选每日任务和每周任务。管理员审核通过后任务才算完成。');
+      setText(notice,'每日任务审核通过后计入学习进度；积分是否发放由管理员单独决定。每周任务不计积分。');
     }
 
     const adminHelp=adminCard?.querySelector('.task-review-card-head p');
-    if(adminHelp){
-      adminHelp.textContent='审核通过会同步主看板；每日任务同步学习进度，但不会自动增加积分。';
-    }
-
-    if(notice&&isOwner()){
-      notice.textContent='审核与积分发放是两个独立操作。管理员可在下方对已通过的每日任务单独发放 1 积分。';
-    }else if(notice&&profile?.username==='user_1'){
-      notice.textContent='每日任务审核通过后计入学习进度；积分是否发放由管理员单独决定。每周任务不计积分。';
-    }
+    setText(adminHelp,'审核通过会同步主看板；每日任务同步学习进度，但不会自动增加积分。');
 
     document.querySelectorAll('#pendingReviewList .task-review-primary').forEach(button=>{
       if(button.textContent.includes('+1'))button.textContent='审核通过';
     });
 
     const metricHelp=q('user1Points')?.closest('.task-review-metric')?.querySelector('small');
-    if(metricHelp)metricHelp.textContent='仅统计管理员已手动发放的积分';
+    setText(metricHelp,'仅统计管理员已手动发放的积分');
   }
 
   function renderPointList(){
@@ -182,9 +179,12 @@
         content.appendChild(badge);
       }
       badge.className='task-submission-state status-approved';
-      badge.textContent=Number(item.points_awarded||0)===1
-        ?'已通过 · +1积分'
-        :'已通过 · 待发积分';
+      setText(
+        badge,
+        Number(item.points_awarded||0)===1
+          ?'已通过 · +1积分'
+          :'已通过 · 待发积分'
+      );
     });
   }
 
@@ -192,15 +192,23 @@
     const total=submissions
       .filter(item=>item.username==='user_1'&&item.task_type==='daily')
       .reduce((sum,item)=>sum+Number(item.points_awarded||0),0);
-    if(q('user1Points'))q('user1Points').textContent=String(total);
+    setText(q('user1Points'),String(total));
+  }
+
+  function observePage(){
+    if(!profile)return;
+    if(!observer)observer=new MutationObserver(schedulePatch);
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
   }
 
   function applyUi(){
+    observer?.disconnect();
     mountPointCard();
     patchStaticText();
     renderPointList();
     patchTaskBadges();
     updateMetrics();
+    observePage();
   }
 
   function schedulePatch(){
@@ -273,10 +281,7 @@
 
     profile=data;
     await loadSubmissions();
-
-    observer?.disconnect();
-    observer=new MutationObserver(schedulePatch);
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
+    observePage();
 
     if(realtimeChannel)client.removeChannel(realtimeChannel);
     realtimeChannel=client
