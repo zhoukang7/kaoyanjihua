@@ -58,13 +58,13 @@ jobs:
             ["comments.css", "task-review.css"].forEach((href) => {
               const stylesheet = document.createElement("link");
               stylesheet.rel = "stylesheet";
-              stylesheet.href = `./${href}`;
+              stylesheet.href = "./" + href;
               document.head.appendChild(stylesheet);
             });
 
             ["comments.js", "task-review.js"].forEach((src) => {
               const script = document.createElement("script");
-              script.src = `./${src}`;
+              script.src = "./" + src;
               script.defer = true;
               document.head.appendChild(script);
             });
