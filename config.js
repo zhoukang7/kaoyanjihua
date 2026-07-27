@@ -7,7 +7,13 @@ window.STUDY_APP_CONFIG = {
 };
 
 (() => {
-  ["comments.css", "task-review.css", "points-control.css", "reward-presets.css"].forEach((href) => {
+  [
+    "comments.css",
+    "task-review.css",
+    "points-control.css",
+    "points-deduction.css",
+    "reward-presets.css"
+  ].forEach((href) => {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
     stylesheet.href = `./${href}`;
@@ -18,6 +24,7 @@ window.STUDY_APP_CONFIG = {
     "comments.js",
     "task-review.js",
     "points-control.js",
+    "points-deduction.js",
     "reward-presets.js",
     "learning-communication.js",
     "reward-presets-stability.js"
