@@ -12,6 +12,49 @@ alter table public.point_ledger
   add constraint point_ledger_entry_type_check
   check (entry_type in ('grant', 'deduction', 'redemption'));
 
+-- 保持原函数返回结构不变，但“已兑换”只统计兑换流水；管理员扣除单独记账。
+create or replace function public.get_user_point_balance(
+  p_user_id uuid default auth.uid()
+)
+returns table (
+  awarded_points integer,
+  redeemed_points integer,
+  pending_points integer,
+  available_points integer
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with target as (
+    select p.id
+    from public.profiles p
+    where p.id = p_user_id
+      and p.username = 'user_1'
+  ),
+  ledger_totals as (
+    select
+      coalesce(sum(case when pl.entry_type = 'grant' and pl.amount > 0 then pl.amount else 0 end), 0)::integer as awarded,
+      coalesce(sum(case when pl.entry_type = 'redemption' and pl.amount < 0 then -pl.amount else 0 end), 0)::integer as redeemed,
+      coalesce(sum(pl.amount), 0)::integer as available
+    from public.point_ledger pl
+    join target t on t.id = pl.user_id
+  ),
+  pending_redemptions as (
+    select coalesce(sum(pr.points_cost), 0)::integer as pending
+    from public.point_redemptions pr
+    join target t on t.id = pr.user_id
+    where pr.status = 'pending'
+  )
+  select
+    ledger_totals.awarded,
+    ledger_totals.redeemed,
+    pending_redemptions.pending,
+    greatest(ledger_totals.available, 0)
+  from ledger_totals, pending_redemptions;
+$$;
+
 create or replace function public.deduct_user_points(
   p_points integer,
   p_reason text default '未完成任务'
@@ -95,7 +138,9 @@ begin
 end;
 $$;
 
+revoke all on function public.get_user_point_balance(uuid) from public;
 revoke all on function public.deduct_user_points(integer, text) from public;
+grant execute on function public.get_user_point_balance(uuid) to authenticated;
 grant execute on function public.deduct_user_points(integer, text) to authenticated;
 
 commit;
