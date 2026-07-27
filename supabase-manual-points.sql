@@ -1,26 +1,58 @@
 -- 独立积分控制、兑换审核与积分流水
--- 前置条件：已执行 supabase.sql、supabase-points-separation.sql、supabase-points-redemption.sql。
--- 本脚本可重复执行。执行后积分不再依赖每日任务数量，由 admin 独立发放。
+-- 前置条件：已执行最新版 supabase.sql。
+-- 本脚本可重复执行。积分与每日/每周任务完全脱钩，只能由 admin 独立发放。
 
 begin;
+
+-- 兼容此前数据库版本；旧任务积分字段不再参与余额计算。
+alter table public.task_submissions
+  add column if not exists points_awarded_by uuid references auth.users(id) on delete set null;
+
+alter table public.task_submissions
+  add column if not exists points_awarded_at timestamptz;
+
+create table if not exists public.point_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  username text not null,
+  display_name text not null,
+  item_name text not null
+    check (char_length(btrim(item_name)) between 1 and 120),
+  points_cost integer not null
+    check (points_cost between 1 and 999),
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected')),
+  review_note text
+    check (review_note is null or char_length(btrim(review_note)) <= 1000),
+  submitted_at timestamptz not null default now(),
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists point_redemptions_status_idx
+  on public.point_redemptions (status, submitted_at desc);
+
+create index if not exists point_redemptions_user_idx
+  on public.point_redemptions (user_id, submitted_at desc);
+
+alter table public.point_redemptions replica identity full;
 
 create table if not exists public.point_ledger (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   username text not null,
   display_name text not null,
-  amount integer not null check (amount between -9999 and 9999 and amount <> 0),
-  entry_type text not null check (entry_type in ('grant', 'redemption')),
-  note text check (note is null or char_length(btrim(note)) <= 500),
+  amount integer not null
+    check (amount between -9999 and 9999 and amount <> 0),
+  entry_type text not null
+    check (entry_type in ('grant', 'redemption')),
+  note text
+    check (note is null or char_length(btrim(note)) <= 500),
   created_by uuid references auth.users(id) on delete set null,
-  source_task_submission_id uuid references public.task_submissions(id) on delete set null,
   source_redemption_id uuid references public.point_redemptions(id) on delete restrict,
   created_at timestamptz not null default now()
 );
-
-create unique index if not exists point_ledger_source_task_unique
-  on public.point_ledger (source_task_submission_id)
-  where source_task_submission_id is not null;
 
 create unique index if not exists point_ledger_source_redemption_unique
   on public.point_ledger (source_redemption_id)
@@ -31,33 +63,8 @@ create index if not exists point_ledger_user_created_idx
 
 alter table public.point_ledger replica identity full;
 
--- 将旧版中已经由管理员发放的任务积分迁移到独立账本，避免历史积分丢失。
-insert into public.point_ledger (
-  user_id,
-  username,
-  display_name,
-  amount,
-  entry_type,
-  note,
-  created_by,
-  source_task_submission_id,
-  created_at
-)
-select
-  ts.user_id,
-  ts.username,
-  ts.display_name,
-  ts.points_awarded,
-  'grant',
-  '历史积分迁移',
-  ts.points_awarded_by,
-  ts.id,
-  coalesce(ts.points_awarded_at, ts.updated_at, now())
-from public.task_submissions ts
-where ts.points_awarded > 0
-on conflict (source_task_submission_id) do nothing;
-
--- 可用积分完全来自独立积分账本；待审核兑换只占用额度，不立即扣分。
+-- 可用积分完全来自独立积分账本：
+-- 管理员发放写入正数；管理员批准兑换写入负数。
 create or replace function public.get_user_point_balance(
   p_user_id uuid default auth.uid()
 )
@@ -100,7 +107,7 @@ as $$
   from ledger_totals, pending_redemptions;
 $$;
 
--- admin 独立发放积分，可输入任意正整数和说明，不依赖任务完成数量。
+-- admin 独立发放任意正整数积分，不需要关联任务。
 create or replace function public.grant_user_points(
   p_points integer,
   p_note text default null
@@ -156,7 +163,7 @@ begin
 end;
 $$;
 
--- 停用旧版“按任务发 1 分”接口，防止继续从任务数量产生积分。
+-- 停用旧版按任务发放积分接口。
 create or replace function public.award_task_point(
   p_submission_id uuid
 )
@@ -170,7 +177,7 @@ begin
 end;
 $$;
 
--- user_1 提交兑换申请。申请时校验可用余额并预留待审核额度。
+-- user_1 提交兑换申请；待审核申请预占额度，但不会立即扣分。
 create or replace function public.submit_point_redemption(
   p_item_name text,
   p_points_cost integer
@@ -245,7 +252,31 @@ begin
 end;
 $$;
 
--- 管理员批准兑换时写入一笔负数账本记录，兑换才真正扣分。
+create or replace function public.withdraw_point_redemption(
+  p_redemption_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_task_submitter() then
+    raise exception '只有 user_1 可以撤回积分兑换申请。';
+  end if;
+
+  delete from public.point_redemptions
+  where id = p_redemption_id
+    and user_id = auth.uid()
+    and status = 'pending';
+
+  if not found then
+    raise exception '只能撤回自己的待审核兑换申请。';
+  end if;
+end;
+$$;
+
+-- 管理员批准兑换后写入负数账本记录，兑换才真正扣分。
 create or replace function public.review_point_redemption(
   p_redemption_id uuid,
   p_decision text,
@@ -332,7 +363,20 @@ begin
 end;
 $$;
 
+drop trigger if exists point_redemptions_set_updated_at on public.point_redemptions;
+create trigger point_redemptions_set_updated_at
+before update on public.point_redemptions
+for each row execute function public.set_updated_at();
+
+alter table public.point_redemptions enable row level security;
 alter table public.point_ledger enable row level security;
+
+drop policy if exists point_redemptions_authenticated_read on public.point_redemptions;
+create policy point_redemptions_authenticated_read
+on public.point_redemptions
+for select
+to authenticated
+using (true);
 
 drop policy if exists point_ledger_authenticated_read on public.point_ledger;
 create policy point_ledger_authenticated_read
@@ -340,6 +384,10 @@ on public.point_ledger
 for select
 to authenticated
 using (true);
+
+revoke all on public.point_redemptions from anon;
+revoke all on public.point_redemptions from authenticated;
+grant select on public.point_redemptions to authenticated;
 
 revoke all on public.point_ledger from anon;
 revoke all on public.point_ledger from authenticated;
@@ -349,25 +397,38 @@ revoke all on function public.get_user_point_balance(uuid) from public;
 revoke all on function public.grant_user_points(integer, text) from public;
 revoke all on function public.award_task_point(uuid) from public;
 revoke all on function public.submit_point_redemption(text, integer) from public;
+revoke all on function public.withdraw_point_redemption(uuid) from public;
 revoke all on function public.review_point_redemption(uuid, text, text) from public;
 
 grant execute on function public.get_user_point_balance(uuid) to authenticated;
 grant execute on function public.grant_user_points(integer, text) to authenticated;
 grant execute on function public.award_task_point(uuid) to authenticated;
 grant execute on function public.submit_point_redemption(text, integer) to authenticated;
+grant execute on function public.withdraw_point_redemption(uuid) to authenticated;
 grant execute on function public.review_point_redemption(uuid, text, text) to authenticated;
 
 do $$
 begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
-     and not exists (
-       select 1
-       from pg_publication_tables
-       where pubname = 'supabase_realtime'
-         and schemaname = 'public'
-         and tablename = 'point_ledger'
-     ) then
-    alter publication supabase_realtime add table public.point_ledger;
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'point_redemptions'
+    ) then
+      alter publication supabase_realtime add table public.point_redemptions;
+    end if;
+
+    if not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'point_ledger'
+    ) then
+      alter publication supabase_realtime add table public.point_ledger;
+    end if;
   end if;
 end
 $$;
