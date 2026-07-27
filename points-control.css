@@ -1,12 +1,15 @@
-.points-exchange-card{margin-top:16px}
+.points-center-section{margin-top:22px}
 .points-balance-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
 .points-balance-grid>div{border:1px solid var(--line);border-radius:14px;padding:13px;background:#fbfdfb}
 .points-balance-grid span{display:block;color:var(--muted);font-size:12px}
 .points-balance-grid strong{display:block;margin-top:4px;font-size:25px;color:var(--green)}
+.points-admin-grant-form{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:10px;align-items:end;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:16px;background:var(--soft)}
+.points-admin-grant-form label,.points-redemption-form label{font-size:13px;font-weight:700}
+.points-admin-grant-form input,.points-redemption-form input{display:block;width:100%;margin-top:6px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.points-exchange-card{margin-top:16px}
 .points-redemption-form{display:grid;grid-template-columns:minmax(0,1fr) 150px auto;gap:10px;align-items:end;border:1px solid var(--line);border-radius:16px;padding:14px;margin:16px 0;background:var(--soft)}
-.points-redemption-form label{font-size:13px;font-weight:700}
-.points-redemption-form input{display:block;width:100%;margin-top:6px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:#fff}
 .points-redemption-form p{grid-column:1/-1;margin:0;color:var(--muted);font-size:12px}
+.points-redeem-button{min-width:116px}
 #redemptionReviewArea{margin-top:18px}
 #redemptionReviewArea h4,.points-history-grid h4{margin:0 0 10px}
 .points-history-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
@@ -19,5 +22,15 @@
 .points-history-item .points-positive{color:#2f6f53}
 .points-history-item .points-negative{color:var(--danger)}
 .points-history-note{grid-column:1/-1;margin:0;padding-top:8px;border-top:1px dashed var(--line);color:var(--muted);font-size:12px}
-@media(max-width:800px){.points-balance-grid{grid-template-columns:repeat(2,1fr)}.points-redemption-form{grid-template-columns:1fr 120px}.points-redemption-form button{grid-column:1/-1}.points-history-grid{grid-template-columns:1fr}}
-@media(max-width:520px){.points-balance-grid{grid-template-columns:1fr 1fr}.points-redemption-form{grid-template-columns:1fr}.points-redemption-form p,.points-redemption-form button{grid-column:auto}.points-history-item{grid-template-columns:1fr auto}}
+@media(max-width:800px){
+  .points-balance-grid{grid-template-columns:repeat(2,1fr)}
+  .points-admin-grant-form,.points-redemption-form{grid-template-columns:1fr 140px}
+  .points-admin-grant-form button,.points-redemption-form button{grid-column:1/-1}
+  .points-history-grid{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+  .points-balance-grid{grid-template-columns:1fr 1fr}
+  .points-admin-grant-form,.points-redemption-form{grid-template-columns:1fr}
+  .points-admin-grant-form button,.points-redemption-form p,.points-redemption-form button{grid-column:auto}
+  .points-history-item{grid-template-columns:1fr auto}
+}
