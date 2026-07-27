@@ -7,13 +7,17 @@ window.STUDY_APP_CONFIG = {
 };
 
 (() => {
-  const stylesheet = document.createElement("link");
-  stylesheet.rel = "stylesheet";
-  stylesheet.href = "./comments.css";
-  document.head.appendChild(stylesheet);
+  ["comments.css", "task-review.css"].forEach((href) => {
+    const stylesheet = document.createElement("link");
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = `./${href}`;
+    document.head.appendChild(stylesheet);
+  });
 
-  const script = document.createElement("script");
-  script.src = "./comments.js";
-  script.defer = true;
-  document.head.appendChild(script);
+  ["comments.js", "task-review.js"].forEach((src) => {
+    const script = document.createElement("script");
+    script.src = `./${src}`;
+    script.defer = true;
+    document.head.appendChild(script);
+  });
 })();
