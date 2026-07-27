@@ -1,0 +1,14 @@
+.points-deduction-metric strong{color:var(--danger)!important}
+.points-deduction-panel{margin-top:16px;border:1px solid #ecdada;border-radius:17px;padding:14px;background:#fffafa}
+.points-deduction-head h4{margin:0;font-size:15px}
+.points-deduction-head p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.6}
+.points-deduction-form{display:grid;grid-template-columns:130px minmax(170px,.8fr) minmax(0,1fr) auto;gap:10px;align-items:end;margin-top:12px}
+.points-deduction-form label{font-size:13px;font-weight:700}
+.points-deduction-form input,.points-deduction-form select{display:block;width:100%;margin-top:6px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font:inherit}
+.points-deduction-form input:focus,.points-deduction-form select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 4px #2f6f5317}
+.points-deduction-form .task-review-danger{min-width:108px}
+.points-deduction-history-section{border-top:1px solid var(--line);padding-top:16px}
+.points-deduction-history-section h4{margin:0 0 10px}
+@media(max-width:1050px){.points-deduction-form{grid-template-columns:130px 1fr 1fr}.points-deduction-form button{grid-column:1/-1}}
+@media(max-width:800px){.points-deduction-form{grid-template-columns:1fr 1fr}.points-deduction-form label:last-of-type{grid-column:1/-1}}
+@media(max-width:520px){.points-deduction-form{grid-template-columns:1fr}.points-deduction-form label:last-of-type,.points-deduction-form button{grid-column:auto}}
