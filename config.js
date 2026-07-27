@@ -14,7 +14,7 @@ window.STUDY_APP_CONFIG = {
     document.head.appendChild(stylesheet);
   });
 
-  ["comments.js", "task-review.js"].forEach((src) => {
+  ["comments.js", "task-review.js", "points-control.js"].forEach((src) => {
     const script = document.createElement("script");
     script.src = `./${src}`;
     script.defer = true;
