@@ -1,0 +1,23 @@
+.points-preset-panel{margin:16px 0;padding:16px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,#fbfdfb,#f1f7f3)}
+.points-preset-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px}
+.points-preset-heading h4{margin:0;font-size:18px}
+.points-preset-heading p{margin:5px 0 0;color:var(--muted);font-size:13px;line-height:1.6}
+.points-preset-balance{white-space:nowrap;border-radius:99px;padding:7px 11px;background:var(--green);color:#fff;font-size:12px;font-weight:800}
+.points-preset-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.points-preset-card{display:flex;min-height:164px;flex-direction:column;align-items:stretch;text-align:left;border:1px solid var(--line);border-radius:15px;padding:13px;background:#fff;color:var(--ink);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.points-preset-card:hover:not(:disabled){transform:translateY(-2px);border-color:#8eb8a0;box-shadow:0 10px 24px #244c3a16}
+.points-preset-card.selected{border-color:var(--green);box-shadow:0 0 0 3px #2f6f5318}
+.points-preset-card:disabled{cursor:not-allowed;opacity:.42;filter:grayscale(.25)}
+.points-preset-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.points-preset-top strong{color:var(--green);font-size:13px}
+.points-preset-category{border-radius:99px;padding:4px 8px;background:var(--soft);color:var(--green);font-size:11px;font-weight:800}
+.points-preset-card>b{margin-top:12px;font-size:15px;line-height:1.4}
+.points-preset-card>small{display:block;flex:1;margin-top:7px;color:var(--muted);font-size:12px;line-height:1.55}
+.points-preset-action{margin-top:12px;color:var(--green);font-size:12px;font-weight:800}
+.points-custom-reward{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:12px;border-top:1px dashed var(--line);padding-top:13px}
+.points-custom-reward strong,.points-custom-reward span{display:block}
+.points-custom-reward span{margin-top:4px;color:var(--muted);font-size:12px}
+.points-preset-rules{display:flex;gap:8px;margin-top:12px;border-radius:12px;padding:10px 12px;background:#fff;color:var(--muted);font-size:12px;line-height:1.55}
+.points-preset-rules strong{flex:0 0 auto;color:var(--ink)}
+@media(max-width:980px){.points-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.points-preset-heading,.points-custom-reward{align-items:stretch;flex-direction:column}.points-preset-balance{align-self:flex-start}.points-preset-grid{grid-template-columns:1fr}.points-preset-card{min-height:0}.points-custom-reward button{width:100%}.points-preset-rules{flex-direction:column}}
