@@ -37,6 +37,7 @@ jobs:
           test -f task-review.js
           test -f task-review.css
           test -f points-control.js
+          test -f points-control.css
           if [ -z "$SUPABASE_URL" ]; then
             echo "::error::Missing repository secret: SUPABASE_URL"
             exit 1
@@ -46,7 +47,7 @@ jobs:
             exit 1
           fi
           mkdir -p _site
-          cp index.html comments.js comments.css task-review.js task-review.css points-control.js _site/
+          cp index.html comments.js comments.css task-review.js task-review.css points-control.js points-control.css _site/
           touch _site/.nojekyll
           cat > _site/config.js <<CONFIG
           window.STUDY_APP_CONFIG = {
@@ -56,7 +57,7 @@ jobs:
           };
 
           (() => {
-            ["comments.css", "task-review.css"].forEach((href) => {
+            ["comments.css", "task-review.css", "points-control.css"].forEach((href) => {
               const stylesheet = document.createElement("link");
               stylesheet.rel = "stylesheet";
               stylesheet.href = "./" + href;
