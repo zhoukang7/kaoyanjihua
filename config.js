@@ -7,7 +7,7 @@ window.STUDY_APP_CONFIG = {
 };
 
 (() => {
-  ["comments.css", "task-review.css"].forEach((href) => {
+  ["comments.css", "task-review.css", "points-control.css"].forEach((href) => {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
     stylesheet.href = `./${href}`;
