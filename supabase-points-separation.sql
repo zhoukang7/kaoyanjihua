@@ -1,6 +1,6 @@
 -- 任务审核与积分发放分离迁移
 -- 在已执行最新版 supabase.sql 的前提下，在 Supabase SQL Editor 中执行本文件。
--- 可重复执行，不会清空已有任务、评论或积分记录。
+-- 可重复执行，不会清空已有任务或评论。
 
 begin;
 
@@ -9,6 +9,15 @@ alter table public.task_submissions
 
 alter table public.task_submissions
   add column if not exists points_awarded_at timestamptz;
+
+-- 旧版本自动增加、但没有管理员发放记录的积分恢复为待发放。
+-- 已通过的任务和学习进度保持不变。
+update public.task_submissions
+set points_awarded = 0,
+    updated_at = now()
+where points_awarded = 1
+  and points_awarded_by is null
+  and points_awarded_at is null;
 
 -- 管理员审核：
 -- 1. 所有每日/每周任务都必须审核后才算完成；
