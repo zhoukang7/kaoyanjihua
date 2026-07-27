@@ -38,6 +38,8 @@ jobs:
           test -f task-review.css
           test -f points-control.js
           test -f points-control.css
+          test -f points-deduction.js
+          test -f points-deduction.css
           test -f reward-presets.js
           test -f reward-presets.css
           test -f learning-communication.js
@@ -51,7 +53,7 @@ jobs:
             exit 1
           fi
           mkdir -p _site
-          cp index.html comments.js comments.css task-review.js task-review.css points-control.js points-control.css reward-presets.js reward-presets.css learning-communication.js reward-presets-stability.js _site/
+          cp index.html comments.js comments.css task-review.js task-review.css points-control.js points-control.css points-deduction.js points-deduction.css reward-presets.js reward-presets.css learning-communication.js reward-presets-stability.js _site/
           touch _site/.nojekyll
           cat > _site/config.js <<CONFIG
           window.STUDY_APP_CONFIG = {
@@ -61,7 +63,13 @@ jobs:
           };
 
           (() => {
-            ["comments.css", "task-review.css", "points-control.css", "reward-presets.css"].forEach((href) => {
+            [
+              "comments.css",
+              "task-review.css",
+              "points-control.css",
+              "points-deduction.css",
+              "reward-presets.css"
+            ].forEach((href) => {
               const stylesheet = document.createElement("link");
               stylesheet.rel = "stylesheet";
               stylesheet.href = "./" + href;
@@ -72,6 +80,7 @@ jobs:
               "comments.js",
               "task-review.js",
               "points-control.js",
+              "points-deduction.js",
               "reward-presets.js",
               "learning-communication.js",
               "reward-presets-stability.js"
