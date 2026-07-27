@@ -120,7 +120,7 @@
         <div class="task-review-card-head">
           <div>
             <h3>管理员审核</h3>
-            <p>审核通过后任务才正式完成；每日任务同时计入学习进度。</p>
+            <p>审核通过后任务才正式完成；取消已通过任务的勾选可撤销审核。</p>
           </div>
           <button id="refreshTaskReviews" class="task-review-ghost" type="button">刷新</button>
         </div>
@@ -152,20 +152,20 @@
     const adminCard=q('adminReviewCard');
 
     if(isOwner()){
-      access.textContent='管理员 · 可审核';
+      access.textContent='管理员 · 可审核与撤销';
       description.textContent='user_1 的每日和每周任务必须审核通过后才算完成。';
-      notice.textContent='积分由下方积分中心独立控制，与任务审核互不影响。';
+      notice.textContent='已通过任务可直接取消勾选撤销审核；每日任务对应学习进度会同步回退。';
       adminCard.classList.remove('hidden');
       renderPendingReviews();
     }else if(isUser1()){
       access.textContent='user_1 · 可提交';
       description.textContent='你可以勾选每日任务和每周任务，管理员审核通过后才算完成。';
-      notice.textContent='任务审核只影响完成状态和学习进度，不会自动产生积分。';
+      notice.textContent='管理员撤销审核后，任务会显示为未通过，并可重新提交。';
       adminCard.classList.add('hidden');
     }else{
       access.textContent='user_2 · 只读';
       description.textContent='user_2 可以查看任务及审核状态，但不能勾选或提交任务。';
-      notice.textContent='积分由管理员独立控制。';
+      notice.textContent='任务审核和撤销均由管理员控制。';
       adminCard.classList.add('hidden');
     }
   }
@@ -230,6 +230,30 @@
     await loadSubmissions();
   }
 
+  async function revokeSubmission(item,input){
+    if(!window.confirm(`确认撤销“${taskLabel(item.task_type,item.task_key)}”的审核？`)){
+      input.checked=true;
+      return false;
+    }
+
+    input.disabled=true;
+    const {error}=await client.rpc('revoke_task_completion',{
+      p_submission_id:item.id,
+      p_review_note:'管理员取消勾选，撤销审核'
+    });
+
+    if(error){
+      input.checked=true;
+      input.disabled=false;
+      notify(error.message);
+      return false;
+    }
+
+    notify('审核已撤销，任务状态和学习进度已同步回退');
+    await loadSubmissions();
+    return true;
+  }
+
   async function submitTask(type,key){
     const {error}=await client.rpc('submit_task_completion',{
       p_task_type:type,p_task_key:key,p_period_key:periodKey(type)
@@ -250,7 +274,7 @@
     return true;
   }
 
-  function statusBadge(row,item,baseChecked){
+  function statusBadge(row,item,baseChecked,adminMode=false){
     const content=row.children[1];
     if(!content)return;
     let text='';
@@ -259,6 +283,7 @@
     if(item){
       text=statusLabels[item.status]||item.status;
       className=` status-${item.status}`;
+      if(item.status==='approved'&&adminMode)text+=' · 取消勾选可撤销';
       if(item.status==='rejected'&&item.review_note)text+=` · ${item.review_note}`;
     }else if(baseChecked){
       text='主看板已完成';
@@ -282,9 +307,9 @@
     const item=currentSubmission(type,task.key);
     let input=oldInput;
 
-    if(input.dataset.taskReviewBound!=='1'){
+    if(input.dataset.taskReviewBound!=='user1'){
       input=oldInput.cloneNode(true);
-      input.dataset.taskReviewBound='1';
+      input.dataset.taskReviewBound='user1';
       input.dataset.dashboardChecked=oldInput.checked?'1':'0';
       oldInput.replaceWith(input);
       input.addEventListener('change',async()=>{
@@ -323,9 +348,57 @@
     statusBadge(row,item,baseChecked);
   }
 
+  function bindAdminApprovedInput(row,item){
+    const oldInput=row.querySelector('input[type="checkbox"]');
+    if(!oldInput)return;
+    let input=oldInput;
+
+    if(input.dataset.taskReviewBound!=='admin-approved'){
+      input=oldInput.cloneNode(true);
+      input.dataset.taskReviewBound='admin-approved';
+      oldInput.replaceWith(input);
+      input.addEventListener('change',async()=>{
+        if(input.checked)return;
+        await revokeSubmission(item,input);
+        scheduleApply();
+      });
+    }
+
+    input.checked=true;
+    input.disabled=false;
+    input.title='取消勾选可撤销审核';
+    row.classList.remove('readonly');
+  }
+
   function decorateAdminRow(row,type,task){
     const item=currentSubmission(type,task.key);
-    statusBadge(row,item?.status==='pending'?item:null,false);
+    const input=row.querySelector('input[type="checkbox"]');
+    if(!input)return;
+
+    if(item?.status==='approved'){
+      bindAdminApprovedInput(row,item);
+      statusBadge(row,item,false,true);
+      return;
+    }
+
+    if(item?.status==='pending'){
+      input.disabled=true;
+      input.title='请在任务审核区域处理';
+      statusBadge(row,item,false,true);
+      return;
+    }
+
+    if(item?.status==='rejected'){
+      input.checked=false;
+      input.disabled=true;
+      input.title='该提交未通过，等待 user_1 重新提交';
+      statusBadge(row,item,false,true);
+      return;
+    }
+
+    input.disabled=false;
+    input.title='';
+    statusBadge(row,null,input.checked,true);
   }
 
   function keepReadOnly(row){
@@ -346,6 +419,7 @@
 
     const dailyRows=[...(q('daily')?.querySelectorAll('.task')||[])];
     const weeklyRows=[...(q('weekly')?.querySelectorAll('.task')||[])];
+
     dailyTasks.forEach((task,index)=>{
       const row=dailyRows[index];
       if(!row)return;
@@ -353,6 +427,7 @@
       else if(isOwner())decorateAdminRow(row,'daily',task);
       else keepReadOnly(row);
     });
+
     weeklyTasks.forEach((task,index)=>{
       const row=weeklyRows[index];
       if(!row)return;
@@ -379,7 +454,7 @@
 
   async function loadSubmissions(){
     const {data,error}=await client.from('task_submissions')
-      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,submitted_at,reviewed_at')
+      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,submitted_at,reviewed_at,revoked_at')
       .order('submitted_at',{ascending:false})
       .limit(500);
     if(error){notify(error.message);return;}
