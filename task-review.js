@@ -25,12 +25,7 @@
     {key:'w_review',label:'完成一次全科周复盘'}
   ];
 
-  const statusLabels={
-    pending:'待审核',
-    approved:'已通过',
-    rejected:'未通过'
-  };
-
+  const statusLabels={pending:'待审核',approved:'已通过',rejected:'未通过'};
   let currentUser=null;
   let profile=null;
   let submissions=[];
@@ -40,12 +35,12 @@
   let toastTimer=null;
 
   const q=id=>document.getElementById(id);
+  const isOwner=()=>profile?.role==='owner';
+  const isUser1=()=>profile?.username==='user_1';
+  const isUser2=()=>profile?.username==='user_2';
 
   function localDateKey(date=new Date()){
-    const year=date.getFullYear();
-    const month=String(date.getMonth()+1).padStart(2,'0');
-    const day=String(date.getDate()).padStart(2,'0');
-    return `${year}-${month}-${day}`;
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
   }
 
   function weekKey(){
@@ -55,21 +50,7 @@
     return localDateKey(date);
   }
 
-  function periodKey(type){
-    return type==='daily'?localDateKey():weekKey();
-  }
-
-  function isOwner(){
-    return profile?.role==='owner';
-  }
-
-  function isUser1(){
-    return profile?.username==='user_1';
-  }
-
-  function isUser2(){
-    return profile?.username==='user_2';
-  }
+  const periodKey=type=>type==='daily'?localDateKey():weekKey();
 
   function notify(message){
     let toast=q('taskReviewToast');
@@ -89,36 +70,22 @@
 
   function formatTime(value){
     return new Intl.DateTimeFormat('zh-CN',{
-      month:'numeric',
-      day:'numeric',
-      hour:'2-digit',
-      minute:'2-digit'
+      month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'
     }).format(new Date(value));
   }
 
   function taskLabel(type,key){
-    const collection=type==='daily'?dailyTasks:weeklyTasks;
-    return collection.find(task=>task.key===key)?.label||key;
+    const tasks=type==='daily'?dailyTasks:weeklyTasks;
+    return tasks.find(task=>task.key===key)?.label||key;
   }
 
   function currentSubmission(type,key){
-    const period=periodKey(type);
     return submissions.find(item=>
       item.username==='user_1'&&
       item.task_type===type&&
       item.task_key===key&&
-      item.period_key===period
+      item.period_key===periodKey(type)
     );
-  }
-
-  function user1Points(){
-    return submissions
-      .filter(item=>
-        item.username==='user_1'&&
-        item.task_type==='daily'&&
-        item.status==='approved'
-      )
-      .reduce((sum,item)=>sum+Number(item.points_awarded||0),0);
   }
 
   function mountPanel(){
@@ -126,56 +93,45 @@
     const app=q('app');
     if(!app)return;
 
-    const commentsSection=q('commentsSection');
-    const footer=app.querySelector('footer');
     const section=document.createElement('section');
     section.id='taskReviewSection';
     section.className='task-review-section';
     section.innerHTML=`
       <div class="task-review-head">
         <div>
-          <h2>任务审核与积分</h2>
+          <h2>任务审核</h2>
           <p id="taskReviewDescription">正在读取账号权限和审核记录。</p>
         </div>
         <span id="taskReviewAccess" class="task-review-access">正在验证</span>
       </div>
-
       <div class="task-review-metrics">
         <article class="task-review-metric">
-          <span>user_1 总积分</span>
-          <strong id="user1Points">0</strong>
-          <small>每日任务审核通过后，每项 +1</small>
-        </article>
-        <article class="task-review-metric">
-          <span>待审核</span>
+          <span>待审核任务</span>
           <strong id="pendingReviewCount">0</strong>
           <small>每日与每周任务提交</small>
         </article>
         <article class="task-review-metric">
-          <span>本日已通过</span>
+          <span>今日已通过</span>
           <strong id="approvedTodayCount">0</strong>
-          <small>仅统计今日每日任务</small>
+          <small>今日每日任务审核结果</small>
         </article>
       </div>
-
       <article id="adminReviewCard" class="task-review-card hidden">
         <div class="task-review-card-head">
           <div>
             <h3>管理员审核</h3>
-            <p>审核通过会同步勾选主看板；每日任务同时增加 1 积分。</p>
+            <p>审核通过后任务才正式完成；每日任务同时计入学习进度。</p>
           </div>
           <button id="refreshTaskReviews" class="task-review-ghost" type="button">刷新</button>
         </div>
         <div id="pendingReviewList" class="task-review-list"></div>
       </article>
+      <div id="taskReviewNotice" class="task-review-notice"></div>`;
 
-      <div id="taskReviewNotice" class="task-review-notice"></div>
-    `;
-
+    const commentsSection=q('commentsSection');
+    const footer=app.querySelector('footer');
     const anchor=commentsSection||footer;
-    if(anchor)app.insertBefore(section,anchor);
-    else app.appendChild(section);
-
+    if(anchor)app.insertBefore(section,anchor);else app.appendChild(section);
     q('refreshTaskReviews')?.addEventListener('click',loadSubmissions);
   }
 
@@ -184,14 +140,11 @@
     const pending=submissions.filter(item=>item.status==='pending');
     const today=localDateKey();
     const approvedToday=submissions.filter(item=>
-      item.task_type==='daily'&&
-      item.period_key===today&&
-      item.status==='approved'
+      item.task_type==='daily'&&item.period_key===today&&item.status==='approved'
     );
 
-    q('user1Points').textContent=String(user1Points());
-    q('pendingReviewCount').textContent=String(pending.length);
-    q('approvedTodayCount').textContent=String(approvedToday.length);
+    if(q('pendingReviewCount'))q('pendingReviewCount').textContent=String(pending.length);
+    if(q('approvedTodayCount'))q('approvedTodayCount').textContent=String(approvedToday.length);
 
     const access=q('taskReviewAccess');
     const description=q('taskReviewDescription');
@@ -200,19 +153,19 @@
 
     if(isOwner()){
       access.textContent='管理员 · 可审核';
-      description.textContent='user_1 的勾选先进入待审核；通过后才同步任务状态和积分。';
-      notice.textContent='管理员原有的学习进度编辑权限保持不变。';
+      description.textContent='user_1 的每日和每周任务必须审核通过后才算完成。';
+      notice.textContent='积分由下方积分中心独立控制，与任务审核互不影响。';
       adminCard.classList.remove('hidden');
       renderPendingReviews();
     }else if(isUser1()){
       access.textContent='user_1 · 可提交';
-      description.textContent='你可以勾选每日任务和每周任务。管理员审核通过前，任务显示为待审核。';
-      notice.textContent='每日任务通过审核后每项增加 1 积分；每周任务不计积分。其他学习进度仍为只读。';
+      description.textContent='你可以勾选每日任务和每周任务，管理员审核通过后才算完成。';
+      notice.textContent='任务审核只影响完成状态和学习进度，不会自动产生积分。';
       adminCard.classList.add('hidden');
     }else{
       access.textContent='user_2 · 只读';
-      description.textContent='user_2 保持只读，可以查看任务、审核状态和积分，但不能勾选任务。';
-      notice.textContent='本次权限调整仅向 user_1 开放每日任务和每周任务的提交交互。';
+      description.textContent='user_2 可以查看任务及审核状态，但不能勾选或提交任务。';
+      notice.textContent='积分由管理员独立控制。';
       adminCard.classList.add('hidden');
     }
   }
@@ -220,7 +173,6 @@
   function renderPendingReviews(){
     const list=q('pendingReviewList');
     if(!list)return;
-
     const pending=submissions
       .filter(item=>item.status==='pending')
       .sort((a,b)=>new Date(a.submitted_at)-new Date(b.submitted_at));
@@ -233,33 +185,26 @@
     list.replaceChildren(...pending.map(item=>{
       const row=document.createElement('article');
       row.className='task-review-item';
-
       const main=document.createElement('div');
       main.className='task-review-item-main';
-
       const title=document.createElement('strong');
       title.textContent=taskLabel(item.task_type,item.task_key);
-
       const meta=document.createElement('span');
       meta.textContent=`${item.task_type==='daily'?'每日任务':'每周任务'} · ${item.period_key} · ${formatTime(item.submitted_at)}`;
-
       main.append(title,meta);
 
       const actions=document.createElement('div');
       actions.className='task-review-actions';
-
       const reject=document.createElement('button');
       reject.type='button';
       reject.className='task-review-danger';
       reject.textContent='不通过';
       reject.addEventListener('click',()=>reviewSubmission(item,'rejected'));
-
       const approve=document.createElement('button');
       approve.type='button';
       approve.className='task-review-primary';
-      approve.textContent=item.task_type==='daily'?'通过并 +1 分':'通过';
+      approve.textContent='审核通过';
       approve.addEventListener('click',()=>reviewSubmission(item,'approved'));
-
       actions.append(reject,approve);
       row.append(main,actions);
       return row;
@@ -280,28 +225,16 @@
       p_decision:decision,
       p_review_note:note||null
     });
-
-    if(error){
-      notify(error.message);
-      return;
-    }
-
+    if(error){notify(error.message);return;}
     notify(decision==='approved'?'审核通过，任务状态已同步':'已标记为未通过');
     await loadSubmissions();
   }
 
   async function submitTask(type,key){
     const {error}=await client.rpc('submit_task_completion',{
-      p_task_type:type,
-      p_task_key:key,
-      p_period_key:periodKey(type)
+      p_task_type:type,p_task_key:key,p_period_key:periodKey(type)
     });
-
-    if(error){
-      notify(error.message);
-      return false;
-    }
-
+    if(error){notify(error.message);return false;}
     notify('已提交，等待管理员审核');
     await loadSubmissions();
     return true;
@@ -309,32 +242,23 @@
 
   async function withdrawTask(type,key){
     const {error}=await client.rpc('withdraw_task_completion',{
-      p_task_type:type,
-      p_task_key:key,
-      p_period_key:periodKey(type)
+      p_task_type:type,p_task_key:key,p_period_key:periodKey(type)
     });
-
-    if(error){
-      notify(error.message);
-      return false;
-    }
-
+    if(error){notify(error.message);return false;}
     notify('已撤回待审核任务');
     await loadSubmissions();
     return true;
   }
 
-  function statusBadge(row,item,baseChecked,type){
+  function statusBadge(row,item,baseChecked){
     const content=row.children[1];
     if(!content)return;
-
     let text='';
     let className='';
 
     if(item){
       text=statusLabels[item.status]||item.status;
       className=` status-${item.status}`;
-      if(item.status==='approved'&&type==='daily')text+=' · +1积分';
       if(item.status==='rejected'&&item.review_note)text+=` · ${item.review_note}`;
     }else if(baseChecked){
       text='主看板已完成';
@@ -342,16 +266,11 @@
     }
 
     let badge=row.querySelector('.task-submission-state');
-    if(!text){
-      badge?.remove();
-      return;
-    }
-
+    if(!text){badge?.remove();return;}
     if(!badge){
       badge=document.createElement('span');
       content.appendChild(badge);
     }
-
     const nextClass=`task-submission-state${className}`;
     if(badge.className!==nextClass)badge.className=nextClass;
     if(badge.textContent!==text)badge.textContent=text;
@@ -360,7 +279,6 @@
   function bindUser1Input(row,type,task){
     const oldInput=row.querySelector('input[type="checkbox"]');
     if(!oldInput)return;
-
     const item=currentSubmission(type,task.key);
     let input=oldInput;
 
@@ -369,22 +287,16 @@
       input.dataset.taskReviewBound='1';
       input.dataset.dashboardChecked=oldInput.checked?'1':'0';
       oldInput.replaceWith(input);
-
       input.addEventListener('change',async()=>{
         const desired=input.checked;
         input.disabled=true;
-
-        const success=desired
-          ?await submitTask(type,task.key)
-          :await withdrawTask(type,task.key);
-
+        const success=desired?await submitTask(type,task.key):await withdrawTask(type,task.key);
         if(!success)input.checked=!desired;
         scheduleApply();
       });
     }
 
     const baseChecked=input.dataset.dashboardChecked==='1';
-
     if(item?.status==='pending'){
       input.checked=true;
       input.disabled=false;
@@ -408,17 +320,12 @@
     }
 
     row.classList.remove('readonly');
-    statusBadge(row,item,baseChecked,type);
+    statusBadge(row,item,baseChecked);
   }
 
   function decorateAdminRow(row,type,task){
     const item=currentSubmission(type,task.key);
-    statusBadge(
-      row,
-      item?.status==='pending'?item:null,
-      false,
-      type
-    );
+    statusBadge(row,item?.status==='pending'?item:null,false);
   }
 
   function keepReadOnly(row){
@@ -429,7 +336,6 @@
 
   function applyTaskPermissions(){
     if(!profile)return;
-
     if(isUser1()){
       if(q('access'))q('access').textContent='user_1 · 可提交任务';
       if(q('role'))q('role').textContent='任务提交账号';
@@ -440,7 +346,6 @@
 
     const dailyRows=[...(q('daily')?.querySelectorAll('.task')||[])];
     const weeklyRows=[...(q('weekly')?.querySelectorAll('.task')||[])];
-
     dailyTasks.forEach((task,index)=>{
       const row=dailyRows[index];
       if(!row)return;
@@ -448,7 +353,6 @@
       else if(isOwner())decorateAdminRow(row,'daily',task);
       else keepReadOnly(row);
     });
-
     weeklyTasks.forEach((task,index)=>{
       const row=weeklyRows[index];
       if(!row)return;
@@ -466,29 +370,19 @@
   function observeTasks(){
     taskObserver?.disconnect();
     taskObserver=new MutationObserver(scheduleApply);
-
     ['daily','weekly'].forEach(id=>{
       const container=q(id);
-      if(container){
-        taskObserver.observe(container,{childList:true,subtree:true});
-      }
+      if(container)taskObserver.observe(container,{childList:true,subtree:true});
     });
-
     scheduleApply();
   }
 
   async function loadSubmissions(){
-    const {data,error}=await client
-      .from('task_submissions')
-      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,points_awarded,submitted_at,reviewed_at')
+    const {data,error}=await client.from('task_submissions')
+      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,submitted_at,reviewed_at')
       .order('submitted_at',{ascending:false})
       .limit(500);
-
-    if(error){
-      notify(error.message);
-      return;
-    }
-
+    if(error){notify(error.message);return;}
     submissions=data||[];
     renderPanel();
     scheduleApply();
@@ -500,64 +394,36 @@
     submissions=[];
     taskObserver?.disconnect();
     taskObserver=null;
-
-    if(realtimeChannel){
-      client.removeChannel(realtimeChannel);
-      realtimeChannel=null;
-    }
-
+    if(realtimeChannel){client.removeChannel(realtimeChannel);realtimeChannel=null;}
     q('taskReviewSection')?.classList.add('hidden');
   }
 
   async function initialize(session){
-    if(!session){
-      cleanup();
-      return;
-    }
-
+    if(!session){cleanup();return;}
     currentUser=session.user;
-
-    const {data,error}=await client
-      .from('profiles')
+    const {data,error}=await client.from('profiles')
       .select('role,username,display_name')
       .eq('id',currentUser.id)
       .single();
-
-    if(error){
-      notify(error.message);
-      return;
-    }
-
+    if(error){notify(error.message);return;}
     profile=data;
     mountPanel();
     q('taskReviewSection')?.classList.remove('hidden');
-
     await loadSubmissions();
     observeTasks();
-
     if(realtimeChannel)client.removeChannel(realtimeChannel);
-    realtimeChannel=client
-      .channel('task-submissions-ui')
-      .on('postgres_changes',{
-        event:'*',
-        schema:'public',
-        table:'task_submissions'
-      },()=>loadSubmissions())
+    realtimeChannel=client.channel('task-submissions-ui')
+      .on('postgres_changes',{event:'*',schema:'public',table:'task_submissions'},()=>loadSubmissions())
       .subscribe();
   }
 
   function start(){
     client.auth.getSession().then(({data})=>initialize(data.session));
     client.auth.onAuthStateChange((event,session)=>{
-      if(event==='SIGNED_IN'||event==='SIGNED_OUT'){
-        setTimeout(()=>initialize(session),0);
-      }
+      if(event==='SIGNED_IN'||event==='SIGNED_OUT')setTimeout(()=>initialize(session),0);
     });
   }
 
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',start,{once:true});
-  }else{
-    start();
-  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
 })();
