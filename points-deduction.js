@@ -42,9 +42,6 @@
 
   const userLedger=()=>ledger.filter(item=>item.username==='user_1');
   const availablePoints=()=>Math.max(0,userLedger().reduce((sum,item)=>sum+Number(item.amount||0),0));
-  const redeemedPoints=()=>userLedger()
-    .filter(item=>item.entry_type==='redemption'&&Number(item.amount)<0)
-    .reduce((sum,item)=>sum+Math.abs(Number(item.amount||0)),0);
   const deductedPoints=()=>userLedger()
     .filter(item=>item.entry_type==='deduction'&&Number(item.amount)<0)
     .reduce((sum,item)=>sum+Math.abs(Number(item.amount||0)),0);
@@ -126,11 +123,12 @@
     q('manualDeductionPanel')?.classList.toggle('hidden',!isOwner());
 
     const deducted=deductedPoints();
-    const redeemed=redeemedPoints();
     const deductible=deductiblePoints();
     const pending=pendingPoints();
     setText(q('deductedPointValue'),String(deducted));
-    setText(q('redeemedPointValue'),String(redeemed));
+    const totalDeductionMetric=q('redeemedPointValue')?.closest('div');
+    setText(totalDeductionMetric?.querySelector('span'),'总扣除');
+    if(totalDeductionMetric)totalDeductionMetric.title='包含管理员扣除和已批准的积分兑换';
 
     const input=q('manualDeductionAmount');
     const button=q('manualDeductionButton');
