@@ -454,7 +454,7 @@
 
   async function loadSubmissions(){
     const {data,error}=await client.from('task_submissions')
-      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,submitted_at,reviewed_at,revoked_at')
+      .select('id,user_id,username,display_name,task_type,task_key,period_key,status,review_note,submitted_at,reviewed_at')
       .order('submitted_at',{ascending:false})
       .limit(500);
     if(error){notify(error.message);return;}
