@@ -13,7 +13,9 @@
   const q=id=>document.getElementById(id);
   const formatTime=value=>new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(value));
   const isOwner=()=>profile?.role==='owner';
-  const notify=text=>{let box=q('commentsToast');if(!box){box=document.createElement('div');box.id='commentsToast';box.className='comments-toast';box.setAttribute('role','status');box.setAttribute('aria-live','polite');document.body.appendChild(box)}clearTimeout(toastTimer);box.textContent=text;box.classList.add('show');toastTimer=setTimeout(()=>box.classList.remove('show'),2600)};
+  const makeNode=(tag,className,text)=>{const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=String(text);return node};
+  const notify=text=>{let box=q('commentsToast');if(!box){box=makeNode('div','comments-toast');box.id='commentsToast';box.setAttribute('role','status');box.setAttribute('aria-live','polite');document.body.appendChild(box)}clearTimeout(toastTimer);box.textContent=text;box.classList.add('show');toastTimer=setTimeout(()=>box.classList.remove('show'),2600)};
+  const showListMessage=message=>{const list=q('commentList');if(list)list.replaceChildren(makeNode('div','comments-empty',message))};
 
   function mount(){
     if(q('commentsSection'))return;
@@ -50,7 +52,7 @@
     if(!session){currentUser=profile=null;comments=[];renderComments();return}
     currentUser=session.user;
     const {data,error}=await client.from('profiles').select('role,username,display_name').eq('id',currentUser.id).single();
-    if(error){q('commentList').innerHTML='<div class="comments-empty">评论权限读取失败。</div>';return}
+    if(error){showListMessage('评论权限读取失败。');return}
     profile=data;
     await loadComments();
     if(channel)client.removeChannel(channel);
@@ -61,54 +63,81 @@
     if(!currentUser)return;
     q('commentsCount').textContent='正在读取评论';
     const {data,error}=await client.from('comments').select('*').order('created_at',{ascending:false}).limit(200);
-    if(error){q('commentList').innerHTML=`<div class="comments-empty">评论读取失败：${escapeHtml(error.message)}</div>`;q('commentsCount').textContent='评论读取失败';return}
+    if(error){showListMessage(`评论读取失败：${error.message}`);q('commentsCount').textContent='评论读取失败';return}
     comments=data||[];renderComments();
   }
 
   function renderComments(){
     const list=q('commentList');if(!list)return;
-    if(!currentUser){list.innerHTML='<div class="comments-empty">登录后可查看学习交流。</div>';q('commentsCount').textContent='';return}
+    if(!currentUser){showListMessage('登录后可查看学习交流。');q('commentsCount').textContent='';return}
     const subject=q('commentFilterSubject').value,status=q('commentFilterStatus').value;
     const filtered=comments.filter(item=>(subject==='all'||item.subject===subject)&&(status==='all'||item.status===status));
     const pending=comments.filter(item=>item.status==='pending').length;
     q('commentsCount').textContent=`${comments.length} 条意见 · ${pending} 条待处理`;
-    list.innerHTML='';
-    if(!filtered.length){list.innerHTML='<div class="comments-empty">暂无符合条件的评论。</div>';return}
-    filtered.forEach(item=>list.appendChild(createCommentNode(item)));
+    if(!filtered.length){showListMessage('暂无符合条件的评论。');return}
+    list.replaceChildren(...filtered.map(createCommentNode));
   }
 
   function createCommentNode(item){
-    const article=document.createElement('article');article.className='comment-item';
+    const article=makeNode('article','comment-item');
     const own=item.author_id===currentUser.id,canEdit=own&&item.status==='pending';
-    article.innerHTML=`<div class="comment-top"><div class="comment-author"><div class="comment-avatar">${escapeHtml((item.author_display_name||item.author_username||'用').slice(0,1))}</div><div class="comment-meta"><strong>${escapeHtml(item.author_display_name||item.author_username)}</strong><small>@${escapeHtml(item.author_username)} · ${formatTime(item.created_at)}</small></div></div><span class="comment-status ${escapeHtml(item.status)}">${labels.status[item.status]||item.status}</span></div><div class="comment-tags"><span class="comment-tag">${labels.category[item.category]||item.category}</span><span class="comment-tag">${labels.subject[item.subject]||item.subject}</span></div><p class="comment-content"></p>`;
-    article.querySelector('.comment-content').textContent=item.content;
-    if(item.admin_reply){const reply=document.createElement('div');reply.className='comment-admin-reply';const title=document.createElement('strong');title.textContent='管理员回复';const body=document.createElement('div');body.style.whiteSpace='pre-wrap';body.textContent=item.admin_reply;reply.append(title,body);article.appendChild(reply)}
-    const actions=document.createElement('div');actions.className='comment-actions';
+    const authorName=String(item.author_display_name||item.author_username||'未知用户');
+    const username=String(item.author_username||'unknown');
+    const safeStatus=Object.prototype.hasOwnProperty.call(labels.status,item.status)?item.status:'pending';
+
+    const top=makeNode('div','comment-top');
+    const author=makeNode('div','comment-author');
+    const avatar=makeNode('div','comment-avatar',authorName.slice(0,1)||'用');
+    const meta=makeNode('div','comment-meta');
+    const name=makeNode('strong','',authorName);
+    const detail=makeNode('small','',`@${username} · ${formatTime(item.created_at)}`);
+    meta.append(name,detail);
+    author.append(avatar,meta);
+    const status=makeNode('span',`comment-status ${safeStatus}`,labels.status[item.status]||String(item.status||'未知状态'));
+    top.append(author,status);
+
+    const tags=makeNode('div','comment-tags');
+    tags.append(
+      makeNode('span','comment-tag',labels.category[item.category]||String(item.category||'未分类')),
+      makeNode('span','comment-tag',labels.subject[item.subject]||String(item.subject||'未关联'))
+    );
+    const content=makeNode('p','comment-content',item.content||'');
+    article.append(top,tags,content);
+
+    if(item.admin_reply){
+      const reply=makeNode('div','comment-admin-reply');
+      const title=makeNode('strong','','管理员回复');
+      const body=makeNode('div','comment-admin-reply-body',item.admin_reply);
+      reply.append(title,body);
+      article.appendChild(reply);
+    }
+
+    const actions=makeNode('div','comment-actions');
     if(canEdit)actions.append(makeButton('编辑','comments-small',()=>showEdit(article,item)),makeButton('删除','comments-danger',()=>deleteComment(item)));
     if(isOwner())actions.append(makeButton(item.admin_reply?'修改处理':'回复处理','comments-small',()=>showReply(article,item)),makeButton('管理员删除','comments-danger',()=>deleteComment(item)));
     if(actions.childNodes.length)article.appendChild(actions);
     return article;
   }
 
-  function makeButton(text,className,handler){const button=document.createElement('button');button.type='button';button.className=className;button.textContent=text;button.addEventListener('click',handler);return button}
+  function makeButton(text,className,handler){const button=makeNode('button',className,text);button.type='button';button.addEventListener('click',handler);return button}
 
   function showEdit(article,item){
     article.querySelector('.comment-edit-panel')?.remove();
-    const panel=document.createElement('div');panel.className='comment-edit-panel';
+    const panel=makeNode('div','comment-edit-panel');
     const textarea=document.createElement('textarea');textarea.maxLength=2000;textarea.value=item.content;
-    const actions=document.createElement('div');actions.className='comment-actions';
+    const actions=makeNode('div','comment-actions');
     actions.append(makeButton('取消','comments-ghost',()=>panel.remove()),makeButton('保存修改','comments-primary',async()=>{const content=textarea.value.trim();if(!content){notify('评论内容不能为空');return}const {error}=await client.from('comments').update({content}).eq('id',item.id);if(error)notify(error.message);else{notify('评论已修改');panel.remove();loadComments()}}));
     panel.append(textarea,actions);article.appendChild(panel);textarea.focus();
   }
 
   function showReply(article,item){
     article.querySelector('.comment-reply-panel')?.remove();
-    const panel=document.createElement('div');panel.className='comment-reply-panel';
+    const panel=makeNode('div','comment-reply-panel');
     const textarea=document.createElement('textarea');textarea.maxLength=2000;textarea.placeholder='填写管理员回复；选择“待处理”时可以暂不回复。';textarea.value=item.admin_reply||'';
-    const row=document.createElement('div');row.className='comment-reply-row';
+    const row=makeNode('div','comment-reply-row');
     const select=document.createElement('select');
-    Object.entries(labels.status).forEach(([value,text])=>{const option=document.createElement('option');option.value=value;option.textContent=text;option.selected=item.status===value;select.appendChild(option)});
-    const actions=document.createElement('div');actions.className='comment-actions';actions.style.marginTop='0';
+    Object.entries(labels.status).forEach(([value,text])=>{const option=makeNode('option','',text);option.value=value;option.selected=item.status===value;select.appendChild(option)});
+    const actions=makeNode('div','comment-actions comment-actions-inline');
     actions.append(makeButton('取消','comments-ghost',()=>panel.remove()),makeButton('保存处理','comments-primary',async()=>{const reply=textarea.value.trim()||null,status=select.value;if(status==='replied'&&!reply){notify('“已回复”状态需要填写回复内容');return}const payload={status,admin_reply:reply,admin_replied_by:reply?currentUser.id:null,admin_replied_at:reply?new Date().toISOString():null};const {error}=await client.from('comments').update(payload).eq('id',item.id);if(error)notify(error.message);else{notify('处理结果已保存');panel.remove();loadComments()}}));
     row.append(select,actions);panel.append(textarea,row);article.appendChild(panel);textarea.focus();
   }
@@ -125,8 +154,6 @@
     if(error){notify(error.message);return}
     q('commentContent').value='';q('commentLength').textContent='0 / 2000';notify('意见已提交');loadComments();
   }
-
-  function escapeHtml(value){return String(value??'').replace(/[&<>"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]))}
 
   const start=()=>{mount();client.auth.getSession().then(({data})=>initialize(data.session));client.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT'||event==='SIGNED_IN')setTimeout(()=>initialize(session),0)})};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
