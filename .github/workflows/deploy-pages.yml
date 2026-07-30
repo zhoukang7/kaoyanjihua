@@ -36,9 +36,11 @@ jobs:
           test -f package.json
           test -f scripts/prepare-static-site.mjs
           test -f scripts/build-site.mjs
+          test -f scripts/add-math-daily-tasks.mjs
           test -f daily-task-settings.js
           test -f daily-task-settings.css
           test -f supabase-daily-task-settings.sql
+          test -f supabase-add-math-daily-tasks.sql
 
           SUPABASE_JS_VERSION="$(node -p "require('./package.json').dependencies['@supabase/supabase-js']")"
           if ! printf '%s' "$SUPABASE_JS_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -52,6 +54,7 @@ jobs:
           tar -xzf ".vendor-cache/$TARBALL" -C .vendor-cache
 
           node scripts/prepare-static-site.mjs
+          node scripts/add-math-daily-tasks.mjs
 
           test -s _site/vendor/supabase.js
           test -s _site/assets/app.css
@@ -70,8 +73,14 @@ jobs:
           grep -Fq 'daily-task-settings.css' _site/config.js
           grep -Fq 'window.STUDY_DAILY_TASKS' _site/assets/app.js
           grep -Fq 'dailyApplied' _site/assets/app.js
+          grep -Fq "d_linear" _site/assets/app.js
+          grep -Fq "d_probability" _site/assets/app.js
+          grep -Fq "math_l" _site/daily-task-settings.js
+          grep -Fq "math_p" _site/daily-task-settings.js
+          grep -Fq "d_linear" _site/task-review.js
+          grep -Fq "d_probability" _site/task-review.js
           grep -Fq 'update_daily_task_config' _site/daily-task-settings.js
-          echo "Static site prepared with editable daily tasks, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
+          echo "Static site prepared with editable high-math, linear-algebra and probability daily tasks, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
