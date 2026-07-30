@@ -7,6 +7,39 @@ window.STUDY_APP_CONFIG = {
 };
 
 (() => {
+  const config = window.STUDY_APP_CONFIG || {};
+  const supabaseGlobal = window.supabase;
+
+  if (
+    !window.getStudySupabaseClient &&
+    supabaseGlobal &&
+    typeof supabaseGlobal.createClient === "function" &&
+    config.supabaseUrl &&
+    config.supabasePublishableKey
+  ) {
+    const originalCreateClient = supabaseGlobal.createClient.bind(supabaseGlobal);
+    let sharedClient = null;
+
+    window.getStudySupabaseClient = () => {
+      if (!sharedClient) {
+        sharedClient = originalCreateClient(
+          config.supabaseUrl,
+          config.supabasePublishableKey,
+          { auth: { persistSession: true, autoRefreshToken: true } }
+        );
+        window.STUDY_SUPABASE_CLIENT = sharedClient;
+      }
+      return sharedClient;
+    };
+
+    supabaseGlobal.createClient = (url, key, options) => {
+      if (url === config.supabaseUrl && key === config.supabasePublishableKey) {
+        return window.getStudySupabaseClient();
+      }
+      return originalCreateClient(url, key, options);
+    };
+  }
+
   [
     "comments.css",
     "task-review.css",
