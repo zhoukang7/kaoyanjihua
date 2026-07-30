@@ -4,3 +4,10 @@
 node_modules/
 _site/
 .DS_Store
+
+# Private Supabase backup exports. Never commit real user data.
+backups/
+*.study-backup.csv
+*.study-backup.json
+kaoyanjihua-backup-*.csv
+kaoyanjihua-backup-*.json
