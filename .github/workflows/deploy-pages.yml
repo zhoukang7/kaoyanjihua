@@ -26,35 +26,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prepare static site
+      - name: Prepare CSP-protected static site
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           LOGIN_EMAIL_DOMAIN: ${{ vars.LOGIN_EMAIL_DOMAIN }}
         run: |
           set -euo pipefail
-          test -f index.html
           test -f package.json
-          test -f comments.js
-          test -f comments.css
-          test -f task-review.js
-          test -f task-review.css
-          test -f points-control.js
-          test -f points-control.css
-          test -f points-deduction.js
-          test -f points-deduction.css
-          test -f reward-presets.js
-          test -f reward-presets.css
-          test -f learning-communication.js
-          test -f reward-presets-stability.js
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "::error::Missing repository secret: SUPABASE_URL"
-            exit 1
-          fi
-          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "::error::Missing repository secret: SUPABASE_PUBLISHABLE_KEY"
-            exit 1
-          fi
+          test -f scripts/prepare-static-site.mjs
 
           SUPABASE_JS_VERSION="$(node -p "require('./package.json').dependencies['@supabase/supabase-js']")"
           if ! printf '%s' "$SUPABASE_JS_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -63,96 +43,20 @@ jobs:
           fi
 
           rm -rf .vendor-cache _site
-          mkdir -p .vendor-cache _site/vendor
+          mkdir -p .vendor-cache
           TARBALL="$(npm pack "@supabase/supabase-js@$SUPABASE_JS_VERSION" --ignore-scripts --silent --pack-destination .vendor-cache)"
           tar -xzf ".vendor-cache/$TARBALL" -C .vendor-cache
-          test -f .vendor-cache/package/dist/umd/supabase.js
 
-          cp index.html comments.js comments.css task-review.js task-review.css points-control.js points-control.css points-deduction.js points-deduction.css reward-presets.js reward-presets.css learning-communication.js reward-presets-stability.js _site/
-          cp .vendor-cache/package/dist/umd/supabase.js _site/vendor/supabase.js
-          sed -i 's#https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2#./vendor/supabase.js#g' _site/index.html
+          node scripts/prepare-static-site.mjs
 
-          if grep -Eq 'https://(cdn\.jsdelivr\.net|unpkg\.com)/.*supabase-js' _site/index.html; then
-            echo "::error::Deployed index.html still references a remote Supabase JS CDN"
-            exit 1
-          fi
-          grep -Fq 'src="./vendor/supabase.js"' _site/index.html
           test -s _site/vendor/supabase.js
-          touch _site/.nojekyll
-
-          cat > _site/config.js <<CONFIG
-          window.STUDY_APP_CONFIG = {
-            supabaseUrl: "${SUPABASE_URL}",
-            supabasePublishableKey: "${SUPABASE_PUBLISHABLE_KEY}",
-            loginEmailDomain: "${LOGIN_EMAIL_DOMAIN:-study822.example.com}"
-          };
-
-          (() => {
-            const config = window.STUDY_APP_CONFIG || {};
-            const supabaseGlobal = window.supabase;
-
-            if (
-              !window.getStudySupabaseClient &&
-              supabaseGlobal &&
-              typeof supabaseGlobal.createClient === "function" &&
-              config.supabaseUrl &&
-              config.supabasePublishableKey
-            ) {
-              const originalCreateClient = supabaseGlobal.createClient.bind(supabaseGlobal);
-              let sharedClient = null;
-
-              window.getStudySupabaseClient = () => {
-                if (!sharedClient) {
-                  sharedClient = originalCreateClient(
-                    config.supabaseUrl,
-                    config.supabasePublishableKey,
-                    { auth: { persistSession: true, autoRefreshToken: true } }
-                  );
-                  window.STUDY_SUPABASE_CLIENT = sharedClient;
-                }
-                return sharedClient;
-              };
-
-              supabaseGlobal.createClient = (url, key, options) => {
-                if (url === config.supabaseUrl && key === config.supabasePublishableKey) {
-                  return window.getStudySupabaseClient();
-                }
-                return originalCreateClient(url, key, options);
-              };
-            }
-
-            [
-              "comments.css",
-              "task-review.css",
-              "points-control.css",
-              "points-deduction.css",
-              "reward-presets.css"
-            ].forEach((href) => {
-              const stylesheet = document.createElement("link");
-              stylesheet.rel = "stylesheet";
-              stylesheet.href = "./" + href;
-              document.head.appendChild(stylesheet);
-            });
-
-            [
-              "comments.js",
-              "task-review.js",
-              "points-control.js",
-              "points-deduction.js",
-              "reward-presets.js",
-              "learning-communication.js",
-              "reward-presets-stability.js"
-            ].forEach((src) => {
-              const script = document.createElement("script");
-              script.src = "./" + src;
-              script.async = false;
-              document.head.appendChild(script);
-            });
-          })();
-          CONFIG
-          grep -Fq 'window.getStudySupabaseClient' _site/config.js
-          grep -Fq 'window.STUDY_SUPABASE_CLIENT' _site/config.js
-          echo "Static site prepared with local Supabase JS $SUPABASE_JS_VERSION and one shared auth client."
+          test -s _site/assets/app.css
+          test -s _site/assets/app.js
+          grep -Fq 'http-equiv="Content-Security-Policy"' _site/index.html
+          grep -Fq 'src="./vendor/supabase.js"' _site/index.html
+          grep -Fq 'href="./assets/app.css"' _site/index.html
+          grep -Fq 'src="./assets/app.js"' _site/index.html
+          echo "Static site prepared with local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
