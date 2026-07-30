@@ -34,6 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f index.html
+          test -f package.json
           test -f comments.js
           test -f comments.css
           test -f task-review.js
@@ -54,9 +55,31 @@ jobs:
             echo "::error::Missing repository secret: SUPABASE_PUBLISHABLE_KEY"
             exit 1
           fi
-          mkdir -p _site
+
+          SUPABASE_JS_VERSION="$(node -p "require('./package.json').dependencies['@supabase/supabase-js']")"
+          if ! printf '%s' "$SUPABASE_JS_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::@supabase/supabase-js must use an exact semantic version"
+            exit 1
+          fi
+
+          rm -rf .vendor-cache _site
+          mkdir -p .vendor-cache _site/vendor
+          TARBALL="$(npm pack "@supabase/supabase-js@$SUPABASE_JS_VERSION" --ignore-scripts --silent --pack-destination .vendor-cache)"
+          tar -xzf ".vendor-cache/$TARBALL" -C .vendor-cache
+          test -f .vendor-cache/package/dist/umd/supabase.js
+
           cp index.html comments.js comments.css task-review.js task-review.css points-control.js points-control.css points-deduction.js points-deduction.css reward-presets.js reward-presets.css learning-communication.js reward-presets-stability.js _site/
+          cp .vendor-cache/package/dist/umd/supabase.js _site/vendor/supabase.js
+          sed -i 's#https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2#./vendor/supabase.js#g' _site/index.html
+
+          if grep -Eq 'https://(cdn\.jsdelivr\.net|unpkg\.com)/.*supabase-js' _site/index.html; then
+            echo "::error::Deployed index.html still references a remote Supabase JS CDN"
+            exit 1
+          fi
+          grep -Fq 'src="./vendor/supabase.js"' _site/index.html
+          test -s _site/vendor/supabase.js
           touch _site/.nojekyll
+
           cat > _site/config.js <<CONFIG
           window.STUDY_APP_CONFIG = {
             supabaseUrl: "${SUPABASE_URL}",
@@ -94,7 +117,7 @@ jobs:
             });
           })();
           CONFIG
-          echo "Static site prepared successfully."
+          echo "Static site prepared with local Supabase JS $SUPABASE_JS_VERSION."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
