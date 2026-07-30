@@ -1,4 +1,5 @@
 # Weekly dependency review for immutable GitHub Actions references.
+# Validation-only change: confirms the protected branch recognizes the build check.
 version: 2
 
 updates:
