@@ -8,6 +8,7 @@ const vendorSource = path.join(root, ".vendor-cache", "package", "dist", "umd", 
 const requiredFiles = [
   "index.html",
   "config.js",
+  "favicon.svg",
   "comments.js",
   "comments.css",
   "task-review.js",
@@ -155,8 +156,8 @@ const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${csp}">`;
 html = replaceExactlyOnce(
   html,
   /<meta name="theme-color"/g,
-  `${cspMeta}\n<meta name="theme-color"`,
-  "CSP insertion"
+  `${cspMeta}\n<link rel="icon" type="image/svg+xml" href="./favicon.svg">\n<meta name="theme-color"`,
+  "CSP and favicon insertion"
 );
 
 if (/<script(?![^>]*\bsrc\s*=)[^>]*>/i.test(html)) fail("Deployed index.html still contains inline JavaScript");
@@ -169,6 +170,7 @@ if (!html.includes('src="./vendor/supabase.js"')) fail("Local Supabase JS refere
 if (!html.includes('href="./assets/app.css"')) fail("Extracted application stylesheet reference is missing");
 if (!html.includes('src="./assets/app.js"')) fail("Extracted application script reference is missing");
 if (!html.includes('http-equiv="Content-Security-Policy"')) fail("CSP meta tag is missing");
+if (!html.includes('rel="icon" type="image/svg+xml" href="./favicon.svg"')) fail("Local favicon reference is missing");
 
 assertSafeJavaScript(appJs, "assets/app.js");
 if (appJs.includes("...(x.metrics?.[k]||{})")) fail("Dashboard still spreads untrusted metric fields into rendering state");
@@ -226,3 +228,4 @@ console.log(`Extracted ${appCss.length} bytes of CSS and ${appJs.length} bytes o
 console.log(`Core innerHTML assignment count: ${coreInnerHtmlAssignments}/4.`);
 console.log("Comment rendering uses textContent/DOM nodes with one static mount template.");
 console.log("Dashboard state accepts only validated numeric progress fields from Supabase.");
+console.log("Local SVG favicon is included and explicitly referenced.");
