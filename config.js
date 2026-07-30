@@ -43,6 +43,7 @@ window.STUDY_APP_CONFIG = {
   [
     "comments.css",
     "task-review.css",
+    "daily-task-settings.css",
     "points-control.css",
     "points-deduction.css",
     "reward-presets.css"
@@ -56,6 +57,7 @@ window.STUDY_APP_CONFIG = {
   [
     "comments.js",
     "task-review.js",
+    "daily-task-settings.js",
     "points-control.js",
     "points-deduction.js",
     "reward-presets.js",
