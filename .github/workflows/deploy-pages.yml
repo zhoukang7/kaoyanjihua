@@ -35,6 +35,10 @@ jobs:
           set -euo pipefail
           test -f package.json
           test -f scripts/prepare-static-site.mjs
+          test -f scripts/build-site.mjs
+          test -f daily-task-settings.js
+          test -f daily-task-settings.css
+          test -f supabase-daily-task-settings.sql
 
           SUPABASE_JS_VERSION="$(node -p "require('./package.json').dependencies['@supabase/supabase-js']")"
           if ! printf '%s' "$SUPABASE_JS_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -52,11 +56,22 @@ jobs:
           test -s _site/vendor/supabase.js
           test -s _site/assets/app.css
           test -s _site/assets/app.js
+          test -s _site/daily-task-settings.js
+          test -s _site/daily-task-settings.css
+          node --check _site/assets/app.js
+          node --check _site/config.js
+          node --check _site/task-review.js
+          node --check _site/daily-task-settings.js
           grep -Fq 'http-equiv="Content-Security-Policy"' _site/index.html
           grep -Fq 'src="./vendor/supabase.js"' _site/index.html
           grep -Fq 'href="./assets/app.css"' _site/index.html
           grep -Fq 'src="./assets/app.js"' _site/index.html
-          echo "Static site prepared with local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
+          grep -Fq 'daily-task-settings.js' _site/config.js
+          grep -Fq 'daily-task-settings.css' _site/config.js
+          grep -Fq 'window.STUDY_DAILY_TASKS' _site/assets/app.js
+          grep -Fq 'dailyApplied' _site/assets/app.js
+          grep -Fq 'update_daily_task_config' _site/daily-task-settings.js
+          echo "Static site prepared with editable daily tasks, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
