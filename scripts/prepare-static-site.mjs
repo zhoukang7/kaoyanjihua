@@ -55,6 +55,25 @@ function assertSafeJavaScript(source, label) {
   }
 }
 
+function assertSafeCommentRendering(source) {
+  const innerHtmlAssignments = (source.match(/\.innerHTML\s*=/g) || []).length;
+  if (innerHtmlAssignments !== 1) {
+    fail(`comments.js must keep exactly one static mount template; found ${innerHtmlAssignments} innerHTML assignments`);
+  }
+
+  const staticMount = source.match(/section\.innerHTML\s*=\s*`([\s\S]*?)`;/);
+  if (!staticMount) fail("comments.js static mount template was not found");
+  if (staticMount[1].includes("${")) {
+    fail("comments.js static mount template must not interpolate runtime values");
+  }
+  if (/\bescapeHtml\b/.test(source)) {
+    fail("comments.js must render database values with textContent instead of HTML escaping helpers");
+  }
+  if (/\.style(?:\.|\s*=)/.test(source)) {
+    fail("comments.js must not create dynamic inline styles");
+  }
+}
+
 for (const relativePath of requiredFiles) {
   await readFile(path.join(root, relativePath), "utf8").catch(() => {
     fail(`Missing required file: ${relativePath}`);
@@ -168,10 +187,17 @@ if (!configTemplate.includes("window.getStudySupabaseClient")) fail("Shared Supa
 if (!configTemplate.includes("window.STUDY_SUPABASE_CLIENT")) fail("Shared Supabase client handle is missing");
 assertSafeJavaScript(configTemplate, "config.js");
 
+const javascriptSources = new Map();
 for (const relativePath of copiedAssets.filter((file) => file.endsWith(".js"))) {
   const source = await readFile(path.join(root, relativePath), "utf8");
+  javascriptSources.set(relativePath, source);
   assertSafeJavaScript(source, relativePath);
 }
+assertSafeCommentRendering(javascriptSources.get("comments.js") || "");
+
+const commentsCss = await readFile(path.join(root, "comments.css"), "utf8");
+if (!commentsCss.includes(".comment-admin-reply-body")) fail("Safe admin reply CSS class is missing");
+if (!commentsCss.includes(".comment-actions-inline")) fail("Inline action layout CSS class is missing");
 
 await writeFile(path.join(outputDir, "index.html"), html);
 await writeFile(path.join(outputDir, "assets", "app.css"), appCss);
@@ -182,3 +208,4 @@ await writeFile(path.join(outputDir, ".nojekyll"), "");
 console.log(`Prepared CSP-protected static site for ${supabaseOrigin}.`);
 console.log(`Extracted ${appCss.length} bytes of CSS and ${appJs.length} bytes of JavaScript.`);
 console.log(`Core innerHTML assignment count: ${coreInnerHtmlAssignments}/4.`);
+console.log("Comment rendering uses textContent/DOM nodes with one static mount template.");
