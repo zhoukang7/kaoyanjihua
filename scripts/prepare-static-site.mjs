@@ -39,6 +39,14 @@ function replaceExactlyOnce(input, pattern, replacement, label) {
   return input.replace(pattern, replacement);
 }
 
+function replaceLiteralExactlyOnce(input, literal, replacement, label) {
+  const firstIndex = input.indexOf(literal);
+  if (firstIndex < 0 || input.indexOf(literal, firstIndex + literal.length) >= 0) {
+    fail(`${label}: expected exactly one literal match`);
+  }
+  return `${input.slice(0, firstIndex)}${replacement}${input.slice(firstIndex + literal.length)}`;
+}
+
 function assertSafeJavaScript(source, label) {
   const forbiddenPatterns = [
     [/\beval\s*\(/, "eval(...)"],
@@ -116,8 +124,12 @@ const inlineScriptMatches = [...html.matchAll(/<script(?![^>]*\bsrc\s*=)[^>]*>([
 if (inlineScriptMatches.length !== 1) {
   fail(`index.html must contain exactly one inline application script; found ${inlineScriptMatches.length}`);
 }
-const appJs = inlineScriptMatches[0][1].trim() + "\n";
+let appJs = inlineScriptMatches[0][1].trim() + "\n";
 html = html.replace(inlineScriptMatches[0][0], '<script src="./assets/app.js"></script>');
+
+const unsafeDashboardMerge = "const merge=x=>{let z=clone(defs);if(x&&typeof x==='object'){z.daily=x.daily||{};z.weekly=x.weekly||{};Object.keys(z.metrics).forEach(k=>z.metrics[k]={...z.metrics[k],...(x.metrics?.[k]||{})})}return z}";
+const safeDashboardMerge = "const cleanNumber=(value,fallback,min)=>{const number=Number(value);return Number.isFinite(number)?Math.max(min,number):fallback};const cleanTaskState=value=>value&&typeof value==='object'&&!Array.isArray(value)?value:{};const merge=x=>{let z=clone(defs);if(x&&typeof x==='object'){z.daily=cleanTaskState(x.daily);z.weekly=cleanTaskState(x.weekly);Object.keys(z.metrics).forEach(k=>{const source=x.metrics?.[k];if(!source||typeof source!=='object'||Array.isArray(source))return;z.metrics[k].done=cleanNumber(source.done,z.metrics[k].done,0);z.metrics[k].goal=cleanNumber(source.goal,z.metrics[k].goal,1)})}return z}";
+appJs = replaceLiteralExactlyOnce(appJs, unsafeDashboardMerge, safeDashboardMerge, "Dashboard metric state sanitizer");
 
 html = replaceExactlyOnce(
   html,
@@ -159,6 +171,10 @@ if (!html.includes('src="./assets/app.js"')) fail("Extracted application script 
 if (!html.includes('http-equiv="Content-Security-Policy"')) fail("CSP meta tag is missing");
 
 assertSafeJavaScript(appJs, "assets/app.js");
+if (appJs.includes("...(x.metrics?.[k]||{})")) fail("Dashboard still spreads untrusted metric fields into rendering state");
+if (!appJs.includes("const cleanNumber=") || !appJs.includes("const cleanTaskState=")) {
+  fail("Dashboard state sanitizer is missing");
+}
 const coreInnerHtmlAssignments = (appJs.match(/\.innerHTML\s*=/g) || []).length;
 if (coreInnerHtmlAssignments > 4) {
   fail(`Core innerHTML assignment budget exceeded: ${coreInnerHtmlAssignments} > 4`);
@@ -209,3 +225,4 @@ console.log(`Prepared CSP-protected static site for ${supabaseOrigin}.`);
 console.log(`Extracted ${appCss.length} bytes of CSS and ${appJs.length} bytes of JavaScript.`);
 console.log(`Core innerHTML assignment count: ${coreInnerHtmlAssignments}/4.`);
 console.log("Comment rendering uses textContent/DOM nodes with one static mount template.");
+console.log("Dashboard state accepts only validated numeric progress fields from Supabase.");
