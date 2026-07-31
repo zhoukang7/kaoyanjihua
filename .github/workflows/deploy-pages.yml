@@ -37,8 +37,11 @@ jobs:
           test -f scripts/prepare-static-site.mjs
           test -f scripts/build-site.mjs
           test -f scripts/add-math-daily-tasks.mjs
+          test -f scripts/add-point-reason-presets.mjs
           test -f daily-task-settings.js
           test -f daily-task-settings.css
+          test -f points-reason-presets.js
+          test -f points-reason-presets.css
           test -f supabase-daily-task-settings.sql
           test -f supabase-add-math-daily-tasks.sql
 
@@ -55,22 +58,28 @@ jobs:
 
           node scripts/prepare-static-site.mjs
           node scripts/add-math-daily-tasks.mjs
+          node scripts/add-point-reason-presets.mjs
 
           test -s _site/vendor/supabase.js
           test -s _site/assets/app.css
           test -s _site/assets/app.js
           test -s _site/daily-task-settings.js
           test -s _site/daily-task-settings.css
+          test -s _site/points-reason-presets.js
+          test -s _site/points-reason-presets.css
           node --check _site/assets/app.js
           node --check _site/config.js
           node --check _site/task-review.js
           node --check _site/daily-task-settings.js
+          node --check _site/points-reason-presets.js
           grep -Fq 'http-equiv="Content-Security-Policy"' _site/index.html
           grep -Fq 'src="./vendor/supabase.js"' _site/index.html
           grep -Fq 'href="./assets/app.css"' _site/index.html
           grep -Fq 'src="./assets/app.js"' _site/index.html
           grep -Fq 'daily-task-settings.js' _site/config.js
           grep -Fq 'daily-task-settings.css' _site/config.js
+          grep -Fq 'points-reason-presets.js' _site/config.js
+          grep -Fq 'points-reason-presets.css' _site/config.js
           grep -Fq 'window.STUDY_DAILY_TASKS' _site/assets/app.js
           grep -Fq 'dailyApplied' _site/assets/app.js
           grep -Fq "d_linear" _site/assets/app.js
@@ -80,7 +89,10 @@ jobs:
           grep -Fq "d_linear" _site/task-review.js
           grep -Fq "d_probability" _site/task-review.js
           grep -Fq 'update_daily_task_config' _site/daily-task-settings.js
-          echo "Static site prepared with editable high-math, linear-algebra and probability daily tasks, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
+          grep -Fq '每日任务完成' _site/points-reason-presets.js
+          grep -Fq '每日学习量等效' _site/points-reason-presets.js
+          grep -Fq 'manualGrantNote' _site/points-reason-presets.js
+          echo "Static site prepared with editable math daily tasks, point grant reason presets, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

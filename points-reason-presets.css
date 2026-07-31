@@ -1,0 +1,9 @@
+.points-reason-presets{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-top:2px}
+.points-reason-presets-label{font-size:12px;font-weight:700;color:var(--muted);margin-right:2px}
+.points-reason-preset{min-height:34px;padding:7px 12px}
+.points-reason-preset[aria-pressed="true"]{border-color:var(--green);color:var(--green);background:#fff}
+@media(max-width:520px){
+  .points-reason-presets{align-items:stretch}
+  .points-reason-presets-label{width:100%}
+  .points-reason-preset{flex:1 1 150px}
+}
