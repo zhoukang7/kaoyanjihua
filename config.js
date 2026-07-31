@@ -45,6 +45,7 @@ window.STUDY_APP_CONFIG = {
     "task-review.css",
     "daily-task-settings.css",
     "points-control.css",
+    "points-reason-presets.css",
     "points-deduction.css",
     "reward-presets.css"
   ].forEach((href) => {
@@ -59,6 +60,7 @@ window.STUDY_APP_CONFIG = {
     "task-review.js",
     "daily-task-settings.js",
     "points-control.js",
+    "points-reason-presets.js",
     "points-deduction.js",
     "reward-presets.js",
     "learning-communication.js",
