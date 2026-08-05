@@ -38,12 +38,15 @@ jobs:
           test -f scripts/build-site.mjs
           test -f scripts/add-math-daily-tasks.mjs
           test -f scripts/add-point-reason-presets.mjs
+          test -f scripts/improve-points-deduction-guidance.mjs
           test -f daily-task-settings.js
           test -f daily-task-settings.css
           test -f points-reason-presets.js
           test -f points-reason-presets.css
           test -f supabase-daily-task-settings.sql
           test -f supabase-add-math-daily-tasks.sql
+          test -f supabase-manual-points.sql
+          test -f supabase-manual-deductions.sql
 
           SUPABASE_JS_VERSION="$(node -p "require('./package.json').dependencies['@supabase/supabase-js']")"
           if ! printf '%s' "$SUPABASE_JS_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -59,6 +62,7 @@ jobs:
           node scripts/prepare-static-site.mjs
           node scripts/add-math-daily-tasks.mjs
           node scripts/add-point-reason-presets.mjs
+          node scripts/improve-points-deduction-guidance.mjs
 
           test -s _site/vendor/supabase.js
           test -s _site/assets/app.css
@@ -67,11 +71,13 @@ jobs:
           test -s _site/daily-task-settings.css
           test -s _site/points-reason-presets.js
           test -s _site/points-reason-presets.css
+          test -s _site/points-deduction.js
           node --check _site/assets/app.js
           node --check _site/config.js
           node --check _site/task-review.js
           node --check _site/daily-task-settings.js
           node --check _site/points-reason-presets.js
+          node --check _site/points-deduction.js
           grep -Fq 'http-equiv="Content-Security-Policy"' _site/index.html
           grep -Fq 'src="./vendor/supabase.js"' _site/index.html
           grep -Fq 'href="./assets/app.css"' _site/index.html
@@ -92,7 +98,11 @@ jobs:
           grep -Fq '每日任务完成' _site/points-reason-presets.js
           grep -Fq '每日学习量等效' _site/points-reason-presets.js
           grep -Fq 'manualGrantNote' _site/points-reason-presets.js
-          echo "Static site prepared with editable math daily tasks, point grant reason presets, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
+          grep -Fq 'supabase-manual-deductions.sql' _site/points-deduction.js
+          grep -Fq 'deduct_user_points' _site/points-deduction.js
+          grep -Fq 'create or replace function public.deduct_user_points' supabase-manual-deductions.sql
+          grep -Fq 'grant execute on function public.deduct_user_points(integer, text) to authenticated' supabase-manual-deductions.sql
+          echo "Static site prepared with editable math daily tasks, point grant presets, deduction RPC migration guidance, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
