@@ -37,14 +37,18 @@ jobs:
           test -f scripts/prepare-static-site.mjs
           test -f scripts/build-site.mjs
           test -f scripts/add-math-daily-tasks.mjs
+          test -f scripts/add-weekly-task-settings.mjs
           test -f scripts/add-point-reason-presets.mjs
           test -f scripts/improve-points-deduction-guidance.mjs
           test -f daily-task-settings.js
           test -f daily-task-settings.css
+          test -f weekly-task-settings.js
+          test -f weekly-task-settings.css
           test -f points-reason-presets.js
           test -f points-reason-presets.css
           test -f supabase-daily-task-settings.sql
           test -f supabase-add-math-daily-tasks.sql
+          test -f supabase-weekly-task-settings.sql
           test -f supabase-manual-points.sql
           test -f supabase-manual-deductions.sql
 
@@ -61,6 +65,7 @@ jobs:
 
           node scripts/prepare-static-site.mjs
           node scripts/add-math-daily-tasks.mjs
+          node scripts/add-weekly-task-settings.mjs
           node scripts/add-point-reason-presets.mjs
           node scripts/improve-points-deduction-guidance.mjs
 
@@ -69,6 +74,8 @@ jobs:
           test -s _site/assets/app.js
           test -s _site/daily-task-settings.js
           test -s _site/daily-task-settings.css
+          test -s _site/weekly-task-settings.js
+          test -s _site/weekly-task-settings.css
           test -s _site/points-reason-presets.js
           test -s _site/points-reason-presets.css
           test -s _site/points-deduction.js
@@ -76,6 +83,7 @@ jobs:
           node --check _site/config.js
           node --check _site/task-review.js
           node --check _site/daily-task-settings.js
+          node --check _site/weekly-task-settings.js
           node --check _site/points-reason-presets.js
           node --check _site/points-deduction.js
           grep -Fq 'http-equiv="Content-Security-Policy"' _site/index.html
@@ -84,6 +92,8 @@ jobs:
           grep -Fq 'src="./assets/app.js"' _site/index.html
           grep -Fq 'daily-task-settings.js' _site/config.js
           grep -Fq 'daily-task-settings.css' _site/config.js
+          grep -Fq 'weekly-task-settings.js' _site/config.js
+          grep -Fq 'weekly-task-settings.css' _site/config.js
           grep -Fq 'points-reason-presets.js' _site/config.js
           grep -Fq 'points-reason-presets.css' _site/config.js
           grep -Fq 'window.STUDY_DAILY_TASKS' _site/assets/app.js
@@ -95,6 +105,12 @@ jobs:
           grep -Fq "d_linear" _site/task-review.js
           grep -Fq "d_probability" _site/task-review.js
           grep -Fq 'update_daily_task_config' _site/daily-task-settings.js
+          grep -Fq 'window.STUDY_WEEKLY_TASKS' _site/weekly-task-settings.js
+          grep -Fq 'window.STUDY_WEEKLY_TASKS' _site/task-review.js
+          grep -Fq 'update_weekly_task_config' _site/weekly-task-settings.js
+          grep -Fq '每周任务用于记录完成情况和作为积分发放参考' _site/weekly-task-settings.js
+          grep -Fq 'create or replace function public.update_weekly_task_config' supabase-weekly-task-settings.sql
+          grep -Fq 'grant execute on function public.update_weekly_task_config(jsonb) to authenticated' supabase-weekly-task-settings.sql
           grep -Fq '每日任务完成' _site/points-reason-presets.js
           grep -Fq '每日学习量等效' _site/points-reason-presets.js
           grep -Fq 'manualGrantNote' _site/points-reason-presets.js
@@ -102,7 +118,7 @@ jobs:
           grep -Fq 'deduct_user_points' _site/points-deduction.js
           grep -Fq 'create or replace function public.deduct_user_points' supabase-manual-deductions.sql
           grep -Fq 'grant execute on function public.deduct_user_points(integer, text) to authenticated' supabase-manual-deductions.sql
-          echo "Static site prepared with editable math daily tasks, point grant presets, deduction RPC migration guidance, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
+          echo "Static site prepared with editable daily and weekly tasks, point grant presets, deduction RPC migration guidance, progress snapshots, local Supabase JS $SUPABASE_JS_VERSION, shared auth client, extracted assets, and CSP."
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
@@ -125,4 +141,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6b24a0339c27f5614fb0b # v4
