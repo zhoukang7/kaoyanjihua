@@ -1,4 +1,5 @@
 name: Deploy study dashboard
+# Pages republish health check: 2026-10-09
 
 on:
   push:
